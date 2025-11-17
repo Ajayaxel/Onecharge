@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:onecharge/screen/onbording/splash.dart';
 
-import 'package:onecharge/screen/onbording/onbording_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -18,7 +18,7 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.white,
         fontFamily: 'Lufga',
       ),
-      home: const OnboardingScreen(),
+      home: const SplashScreen(),
     );
   }
 }

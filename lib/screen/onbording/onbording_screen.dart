@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:onecharge/const/onebtn.dart';
 import 'package:onecharge/resources/app_resources.dart';
 import 'package:onecharge/screen/login/phone_login.dart';
+import 'package:onecharge/utils/onboarding_service.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -41,27 +42,39 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     super.dispose();
   }
 
-  void _nextPage() {
+  void _nextPage() async {
     if (_currentPage < _pages.length - 1) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
     } else {
-    
-       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PhoneLogin()));
+      // Mark onboarding as completed
+      await OnboardingService.completeOnboarding();
+      if (!mounted) return;
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PhoneLogin()));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenHeight < 700;
+    final isLargeScreen = screenHeight > 900;
+    
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
             // Top section with logo and tagline
             Padding(
-              padding: const EdgeInsets.only(top: 20, bottom: 2),
+              padding: EdgeInsets.only(
+                top: isSmallScreen ? 10 : 20,
+                bottom: 2,
+                left: 16,
+                right: 16,
+              ),
               child: Column(
                 children: [
                   Image.asset(
@@ -70,11 +83,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     height: AppHeights.logoHeight,
                     fit: BoxFit.cover,
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: isSmallScreen ? 12 : 16),
                   Text(
                     "Electric vehicle charging station for everyone.\nDiscover. Charge. Pay.",
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 14, color: AppColors.textColor),
+                    style: TextStyle(
+                      fontSize: isSmallScreen ? 12 : 14,
+                      color: AppColors.textColor,
+                    ),
                   ),
                 ],
               ),
@@ -95,6 +111,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     pageData: _pages[index],
                     pageIndex: index,
                     currentPage: _currentPage,
+                    screenHeight: screenHeight,
+                    screenWidth: screenWidth,
+                    isSmallScreen: isSmallScreen,
+                    isLargeScreen: isLargeScreen,
                   );
                 },
               ),
@@ -102,7 +122,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
             // Pagination indicators
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20),
+              padding: EdgeInsets.symmetric(vertical: isSmallScreen ? 12 : 20),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: List.generate(
@@ -123,11 +143,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
               ),
             ),
-            SizedBox(height: 20),
+            SizedBox(height: isSmallScreen ? 12 : 20),
 
             // Continue button
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              padding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: isSmallScreen ? 12 : 20,
+              ),
               child: OneBtn(
                 text: _currentPage == _pages.length - 1
                     ? "Get Started"
@@ -158,12 +181,20 @@ class OnboardingPageWidget extends StatefulWidget {
   final OnboardingPageData pageData;
   final int pageIndex;
   final int currentPage;
+  final double screenHeight;
+  final double screenWidth;
+  final bool isSmallScreen;
+  final bool isLargeScreen;
 
   const OnboardingPageWidget({
     super.key,
     required this.pageData,
     required this.pageIndex,
     required this.currentPage,
+    required this.screenHeight,
+    required this.screenWidth,
+    required this.isSmallScreen,
+    required this.isLargeScreen,
   });
 
   @override
@@ -223,72 +254,94 @@ class _OnboardingPageWidgetState extends State<OnboardingPageWidget>
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // Animated illustration - no padding
-        SizedBox(
-          height: 350,
-          width: double.infinity,
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: SlideTransition(
-              position: _slideAnimation,
-              child: Align(
-                alignment: widget.pageIndex == 0
-                    ? Alignment.centerLeft
-                    : widget.pageIndex == 1
-                        ? Alignment.centerRight
-                        : Alignment.center,
-                child: Image.asset(
-                  widget.pageData.image,
-                  fit: BoxFit.contain,
+    // Calculate responsive heights based on screen size
+    final imageHeight = widget.isSmallScreen
+        ? widget.screenHeight * 0.25
+        : widget.isLargeScreen
+            ? widget.screenHeight * 0.35
+            : widget.screenHeight * 0.30;
+    
+    final titleSpacing = widget.isSmallScreen ? 20.0 : 30.0;
+    final descriptionSpacing = widget.isSmallScreen ? 8.0 : 10.0;
+    final titleFontSize = widget.isSmallScreen ? 20.0 : widget.isLargeScreen ? 28.0 : 24.0;
+    final descriptionFontSize = widget.isSmallScreen ? 12.0 : widget.isLargeScreen ? 16.0 : 14.0;
+    
+    return SingleChildScrollView(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minHeight: widget.screenHeight * 0.5,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Animated illustration - responsive height
+            SizedBox(
+              height: imageHeight,
+              width: double.infinity,
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: SlideTransition(
+                  position: _slideAnimation,
+                  child: Align(
+                    alignment: widget.pageIndex == 0
+                        ? Alignment.centerLeft
+                        : widget.pageIndex == 1
+                            ? Alignment.centerRight
+                            : Alignment.center,
+                    child: Image.asset(
+                      widget.pageData.image,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
 
-        const SizedBox(height: 30),
+            SizedBox(height: titleSpacing),
 
-        // Animated title - with padding
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: SlideTransition(
-              position: _slideAnimation,
-              child: Text(
-                widget.pageData.title,
-
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 24,
-                  color: AppColors.textColor,
-                  fontWeight: FontWeight.w600,
+            // Animated title - with padding
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: SlideTransition(
+                  position: _slideAnimation,
+                  child: Text(
+                    widget.pageData.title,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: titleFontSize,
+                      color: AppColors.textColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
 
-        const SizedBox(height: 10),
+            SizedBox(height: descriptionSpacing),
 
-        // Animated description - with padding
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: SlideTransition(
-              position: _slideAnimation,
-              child: Text(
-                widget.pageData.description,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: AppColors.textColor),
+            // Animated description - with padding
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: SlideTransition(
+                  position: _slideAnimation,
+                  child: Text(
+                    widget.pageData.description,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: descriptionFontSize,
+                      color: AppColors.textColor,
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
