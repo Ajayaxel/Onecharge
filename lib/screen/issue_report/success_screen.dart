@@ -3,7 +3,14 @@ import 'package:onecharge/const/onebtn.dart';
 import 'package:onecharge/resources/app_resources.dart';
 
 class SuccessScreen extends StatelessWidget {
-  const SuccessScreen({super.key});
+  const SuccessScreen({
+    super.key,
+    this.isSuccess = true,
+    this.message,
+  });
+
+  final bool isSuccess;
+  final String? message;
 
   @override
   Widget build(BuildContext context) {
@@ -16,28 +23,28 @@ class SuccessScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Spacer(),
-              // Green Checkmark Icon
+              // Icon (Checkmark for success, Error for failure)
               Container(
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: Colors.green,
+                    color: isSuccess ? Colors.green : Colors.red,
                     width: 3,
                   ),
                 ),
-                child: const Icon(
-                  Icons.check,
-                  color: Colors.green,
+                child: Icon(
+                  isSuccess ? Icons.check : Icons.error,
+                  color: isSuccess ? Colors.green : Colors.red,
                   size: 60,
                 ),
               ),
               const SizedBox(height: 24),
               // Title
-              const Text(
-                'Successful',
-                style: TextStyle(
+              Text(
+                isSuccess ? 'Successful' : 'Error',
+                style: const TextStyle(
                   color: AppColors.textColor,
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
@@ -48,7 +55,10 @@ class SuccessScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32.0),
                 child: Text(
-                  'Lorem Ipsum is simply dummy text of the printing and typesetting',
+                  message ??
+                      (isSuccess
+                          ? 'Service ticket created successfully'
+                          : 'Something went wrong. Please try again.'),
                   style: TextStyle(
                     color: Colors.grey.shade600,
                     fontSize: 14,
@@ -57,11 +67,15 @@ class SuccessScreen extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              // Done Button
+              // Done/Retry Button
               OneBtn(
-                text: 'Done',
+                text: isSuccess ? 'Done' : 'Go Back',
                 onPressed: () {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
+                  if (isSuccess) {
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                  } else {
+                    Navigator.of(context).pop();
+                  }
                 },
               ),
             ],

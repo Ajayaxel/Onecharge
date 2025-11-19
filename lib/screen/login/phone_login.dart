@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
 import 'package:onecharge/const/onebtn.dart';
+import 'package:onecharge/features/auth/presentation/bloc/login_bloc.dart';
 import 'package:onecharge/resources/app_resources.dart';
-import 'package:onecharge/models/country.dart';
-import 'package:onecharge/data/countries_data.dart';
-import 'package:onecharge/screen/login/otp_verification.dart';
-import 'package:onecharge/utils/country_utils.dart';
-import 'package:onecharge/widgets/country_picker.dart';
+import 'package:onecharge/screen/home/home_screen.dart';
+import 'package:onecharge/screen/login/user_info.dart';
+import 'package:onecharge/screen/register/register_screen.dart';
+import 'package:onecharge/screen/vehicle/vehicle_selection.dart';
 
 class PhoneLogin extends StatefulWidget {
   const PhoneLogin({super.key});
@@ -15,30 +17,46 @@ class PhoneLogin extends StatefulWidget {
 }
 
 class _PhoneLoginState extends State<PhoneLogin> {
-  final TextEditingController _phoneController = TextEditingController();
-  bool _isTermsAccepted = false;
-  Country _selectedCountry = CountriesData.defaultCountry;
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
 
-  void _showCountryPicker() {
-    CountryPicker.show(
-      context: context,
-      onCountrySelected: (country) {
-        setState(() {
-          _selectedCountry = country;
-        });
-      },
-    );
-  }
+  bool _isPasswordVisible = false;
 
   @override
   void dispose() {
-    _phoneController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
+  }
+
+  bool _isValidEmail(String email) {
+    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+  }
+
+  void _handleLogin(BuildContext context) {
+    
+    if (_formKey.currentState?.validate() ?? false) {
+      FocusScope.of(context).unfocus();
+      context.read<LoginBloc>().add(
+        LoginSubmitted(
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+        ),
+      );
+    }
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -69,100 +87,167 @@ class _PhoneLoginState extends State<PhoneLogin> {
                 ),
               ),
 
-              const SizedBox(height: 120),
+              const SizedBox(height: 80),
 
-              /// Phone Number Field
-              Container(
-                height: 50,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade400),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
+              /// Form
+              Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(width: 12),
+                    /// Email Field
+                    TextFormField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade400),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade400),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade400),
+                        ),
+                        errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Colors.red),
+                        ),
+                        focusedErrorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Colors.red),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        hintText: "Email",
+                        hintStyle: const TextStyle(fontSize: 16),
+                        errorStyle: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.red,
+                        ),
+                      ),
+                      style: const TextStyle(fontSize: 16),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your email';
+                        }
+                        if (!_isValidEmail(value)) {
+                          return 'Please enter a valid email';
+                        }
+                        return null;
+                      },
+                    ),
 
-                    /// Country Flag - Tappable
-                    GestureDetector(
-                      onTap: _showCountryPicker,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: Image.network(
-                          CountryUtils.getFlagUrl(_selectedCountry.code),
-                          width: 32,
-                          height: 22,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              width: 32,
-                              height: 22,
-                              color: Colors.grey.shade300,
-                            );
+                    const SizedBox(height: 16),
+
+                    /// Password Field
+                    TextFormField(
+                      controller: _passwordController,
+                      obscureText: !_isPasswordVisible,
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) => _handleLogin(context),
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade400),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade400),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade400),
+                        ),
+                        errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Colors.red),
+                        ),
+                        focusedErrorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Colors.red),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        hintText: "Password",
+                        hintStyle: const TextStyle(fontSize: 16),
+                        errorStyle: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.red,
+                        ),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _isPasswordVisible
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                            size: 20,
+                            color: Colors.grey.shade600,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _isPasswordVisible = !_isPasswordVisible;
+                            });
                           },
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-
-                    /// Dropdown Icon - Tappable
-                    GestureDetector(
-                      onTap: _showCountryPicker,
-                      child: const Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-
-                    /// Country Code - Tappable
-                    GestureDetector(
-                      onTap: _showCountryPicker,
-                      child: Text(
-                        _selectedCountry.dialCode,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: _phoneController,
-                        keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          hintText: "Mobile Number",
-                          hintStyle: TextStyle(fontSize: 16),
-                        ),
-                      ),
+                      style: const TextStyle(fontSize: 16),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your password';
+                        }
+                        if (value.length < 6) {
+                          return 'Password must be at least 6 characters';
+                        }
+                        return null;
+                      },
                     ),
                   ],
                 ),
               ),
 
-              SizedBox(height: 24),
-              OneBtn(
-                text: "Continue",
-                onPressed: _isTermsAccepted
-                    ? () {
-                        final phoneNumber = _phoneController.text;
-                        final fullNumber = '${_selectedCountry.dialCode} $phoneNumber';
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => OtpVerification(
-                              phoneNumber: fullNumber,
-                            ),
-                          ),
-                        );
-                        // You can add your API call here
-                      }
-                    : null,
+              const SizedBox(height: 24),
+              BlocConsumer<LoginBloc, LoginState>(
+                listener: (context, state) {
+                  if (!mounted) return;
+                  if (state.status == LoginStatus.failure &&
+                      state.message != null) {
+                    _showSnackBar(state.message!);
+                  } else if (state.status == LoginStatus.success) {
+                    _showSnackBar(state.message ?? 'Login successful');
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (context) => const VehicleSelection()),
+                    );
+                  }
+                },
+                builder: (context, state) {
+                  final isLoading = state.status == LoginStatus.loading;
+                  final canSubmit = !isLoading;
+                  return OneBtn(
+                    text: "Continue",
+                    isLoading: isLoading,
+                    onPressed: canSubmit ? () => _handleLogin(context) : null,
+                  );
+                },
               ),
 
-              const SizedBox(height: 50),
+              const SizedBox(height: 20),
+              TextButton(
+                onPressed: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const RegisterScreen()));
+                },
+                child: Text('dont have an account? Register', style: TextStyle(fontSize: 14, color: AppColors.textColor),),
+              ),
+
+              const SizedBox(height: 20),
 
               /// Divider OR
               Row(
@@ -189,47 +274,7 @@ class _PhoneLoginState extends State<PhoneLogin> {
               ),
               const Spacer(),
 
-              /// Checkbox + Terms Text
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _isTermsAccepted = !_isTermsAccepted;
-                      });
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Icon(
-                        _isTermsAccepted
-                            ? Icons.check_box
-                            : Icons.check_box_outline_blank,
-                        size: 20,
-                        color: AppColors.textColor,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _isTermsAccepted = !_isTermsAccepted;
-                        });
-                      },
-                      child: Text(
-                        overflow: TextOverflow.fade,
-                        "By continuing, I accept the Privacy Policy and\nTerms of Service",
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: AppColors.textColor,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+     
 
               const SizedBox(height: 20),
             ],
