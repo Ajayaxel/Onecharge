@@ -4,6 +4,12 @@ import 'package:onecharge/core/error/api_exception.dart';
 import 'package:onecharge/features/auth/data/repositories/auth_repository.dart';
 import 'package:onecharge/resources/app_resources.dart';
 import 'package:onecharge/screen/login/phone_login.dart';
+import 'package:onecharge/screen/login/otp_verification.dart';
+import 'package:onecharge/widgets/country_picker.dart';
+import 'package:onecharge/models/country.dart';
+import 'package:onecharge/data/countries_data.dart';
+import 'package:onecharge/utils/country_utils.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -25,6 +31,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
   bool _isLoading = false;
+  bool _isTermsAccepted = false;
+  Country _selectedCountry = CountriesData.defaultCountry;
 
   @override
   void dispose() {
@@ -40,12 +48,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
   }
 
-  bool _isValidPhone(String phone) {
-    // Basic phone validation - accepts international format with +
-    return RegExp(r'^\+?[1-9]\d{1,14}$').hasMatch(phone.replaceAll(RegExp(r'[\s-]'), ''));
-  }
-
   Future<void> _handleRegister(BuildContext context) async {
+    if (!_isTermsAccepted) {
+      _showSnackBar('Please accept the Terms & Conditions and Privacy Policy');
+      return;
+    }
+
     if (_formKey.currentState?.validate() ?? false) {
       FocusScope.of(context).unfocus();
       
@@ -54,10 +62,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
       });
 
       try {
+        // Combine country code with phone number
+        final fullPhoneNumber = '${_selectedCountry.dialCode}${_phoneNumberController.text.trim()}';
+        
         final response = await _authRepository.register(
           name: _nameController.text.trim(),
           email: _emailController.text.trim(),
-          phone: _phoneNumberController.text.trim(),
+          phone: fullPhoneNumber,
           password: _passwordController.text,
           passwordConfirmation: _confirmPasswordController.text,
           profileImage: '',
@@ -67,11 +78,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
         _showSnackBar(response.message);
         
-        // Navigate to login screen after successful registration
+        // Navigate to OTP verification screen after successful registration
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => const PhoneLogin(),
+            builder: (context) => OtpVerification(
+              email: _emailController.text.trim(),
+            ),
           ),
         );
       } on ApiException catch (error) {
@@ -90,6 +103,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  Future<void> _launchUrl(String url) async {
+    final Uri uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        _showSnackBar('Could not open the link');
+      }
+    }
+  }
+
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -98,9 +122,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        body: SafeArea(
+          child: SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 22),
             child: Column(
@@ -239,6 +265,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
 
                       const SizedBox(height: 16),
+                      /// Phone Number Field with Country Code Picker
                       TextFormField(
                         controller: _phoneNumberController,
                         keyboardType: TextInputType.phone,
@@ -274,13 +301,69 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             fontSize: 12,
                             color: Colors.red,
                           ),
+                          prefixIcon: InkWell(
+                            onTap: () {
+                              CountryPicker.show(
+                                context: context,
+                                onCountrySelected: (country) {
+                                  setState(() {
+                                    _selectedCountry = country;
+                                  });
+                                },
+                              );
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: Image.network(
+                                      CountryUtils.getFlagUrl(_selectedCountry.code),
+                                      width: 24,
+                                      height: 18,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Container(
+                                          width: 24,
+                                          height: 18,
+                                          color: Colors.grey.shade300,
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _selectedCountry.dialCode,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    Icons.arrow_drop_down,
+                                    color: Colors.grey.shade600,
+                                    size: 20,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          prefixIconConstraints: const BoxConstraints(
+                            minWidth: 120,
+                            minHeight: 48,
+                          ),
                         ),
                         style: const TextStyle(fontSize: 16),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'Please enter your phone number';
                           }
-                          if (!_isValidPhone(value)) {
+                          // Remove spaces and dashes for validation
+                          final cleanPhone = value.replaceAll(RegExp(r'[\s-]'), '');
+                          if (!RegExp(r'^[0-9]{6,15}$').hasMatch(cleanPhone)) {
                             return 'Please enter a valid phone number';
                           }
                           return null;
@@ -422,13 +505,80 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 24),
 
+                /// Terms & Conditions Checkbox
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Checkbox(
+                      value: _isTermsAccepted,
+                      onChanged: (value) {
+                        setState(() {
+                          _isTermsAccepted = value ?? false;
+                        });
+                      },
+                      activeColor: Colors.black,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                    ), 
+                    SizedBox(width: 10,),
+                    Expanded(
+                      child: RichText(
+                        text: TextSpan(
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textColor,
+                            height: 1.4,
+                          ),
+                          children: [
+                            const TextSpan(text: 'I agree to the '),
+                            WidgetSpan(
+                              child: GestureDetector(
+                                onTap: () => _launchUrl('https://onecharge.io/privacy'),
+                                child: Text(
+                                  'Terms & Conditions',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.primaryColor,
+                                    fontWeight: FontWeight.w600,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const TextSpan(text: ' and '),
+                            WidgetSpan(
+                              child: GestureDetector(
+                                onTap: () => _launchUrl('https://onecharge.io/privacy'),
+                                child: Text(
+                                  'Privacy Policy',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.primaryColor,
+                                    fontWeight: FontWeight.w600,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+
                 OneBtn(
                   text: "Register",
                   isLoading: _isLoading,
-                  onPressed: _isLoading ? null : () => _handleRegister(context),
+                  onPressed: (_isLoading || !_isTermsAccepted)
+                      ? null
+                      : () => _handleRegister(context),
                 ),
 
-                const SizedBox(height: 50),
+                const SizedBox(height: 24),
 
                 TextButton(
                   onPressed: () {
@@ -441,7 +591,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   },
                   child: Text(
                     'Already have an account? Login',
-                    style: TextStyle(fontSize: 14, color: AppColors.textColor),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textColor,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
 
@@ -450,6 +604,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

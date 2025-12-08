@@ -9,25 +9,29 @@ import 'location_state.dart';
 
 class LocationCubit extends Cubit<LocationState> {
   LocationCubit({LocationRepository? repository})
-      : _repository = repository ?? LocationRepository(),
-        super(const LocationState());
+    : _repository = repository ?? LocationRepository(),
+      super(const LocationState());
 
   final LocationRepository _repository;
 
   Future<void> initialize() async {
-    emit(state.copyWith(
-      status: LocationStatus.loading,
-      message: null,
-      saveSuccess: false,
-    ));
+    emit(
+      state.copyWith(
+        status: LocationStatus.loading,
+        message: null,
+        saveSuccess: false,
+      ),
+    );
 
     final permissionGranted = await _ensurePermission();
     if (!permissionGranted) {
-      emit(state.copyWith(
-        status: LocationStatus.permissionDenied,
-        message:
-            'Location permissions are required to auto-detect your position.',
-      ));
+      emit(
+        state.copyWith(
+          status: LocationStatus.permissionDenied,
+          message:
+              'Location permissions are required to auto-detect your position.',
+        ),
+      );
       return;
     }
 
@@ -42,20 +46,24 @@ class LocationCubit extends Cubit<LocationState> {
         longitude: latLng.longitude,
       );
 
-      emit(state.copyWith(
-        status: LocationStatus.ready,
-        currentLocation: latLng,
-        selectedLocation: latLng,
-        selectedAddress: address ?? state.selectedAddress,
-        saveSuccess: false,
-        message: null,
-        incrementCameraMove: true,
-      ));
+      emit(
+        state.copyWith(
+          status: LocationStatus.ready,
+          currentLocation: latLng,
+          selectedLocation: latLng,
+          selectedAddress: address ?? state.selectedAddress,
+          saveSuccess: false,
+          message: null,
+          incrementCameraMove: true,
+        ),
+      );
     } catch (error) {
-      emit(state.copyWith(
-        status: LocationStatus.error,
-        message: 'Unable to fetch current location. Please try again.',
-      ));
+      emit(
+        state.copyWith(
+          status: LocationStatus.error,
+          message: 'Unable to fetch current location. Please try again.',
+        ),
+      );
     }
   }
 
@@ -74,20 +82,24 @@ class LocationCubit extends Cubit<LocationState> {
         longitude: latLng.longitude,
       );
 
-      emit(state.copyWith(
-        status: LocationStatus.ready,
-        currentLocation: latLng,
-        selectedLocation: latLng,
-        selectedAddress: address ?? state.selectedAddress,
-        saveSuccess: false,
-        message: null,
-        incrementCameraMove: true,
-      ));
+      emit(
+        state.copyWith(
+          status: LocationStatus.ready,
+          currentLocation: latLng,
+          selectedLocation: latLng,
+          selectedAddress: address ?? state.selectedAddress,
+          saveSuccess: false,
+          message: null,
+          incrementCameraMove: true,
+        ),
+      );
     } catch (_) {
-      emit(state.copyWith(
-        message: 'Unable to refresh location right now.',
-        status: LocationStatus.error,
-      ));
+      emit(
+        state.copyWith(
+          message: 'Unable to refresh location right now.',
+          status: LocationStatus.error,
+        ),
+      );
     }
   }
 
@@ -97,15 +109,17 @@ class LocationCubit extends Cubit<LocationState> {
       longitude: latLng.longitude,
     );
 
-    emit(state.copyWith(
-      status: LocationStatus.ready,
-      selectedLocation: latLng,
-      selectedAddress: address ?? state.selectedAddress,
-      saveSuccess: false,
-      message: null,
-      suggestions: const [],
-      incrementCameraMove: true,
-    ));
+    emit(
+      state.copyWith(
+        status: LocationStatus.ready,
+        selectedLocation: latLng,
+        selectedAddress: address ?? state.selectedAddress,
+        saveSuccess: false,
+        message: null,
+        suggestions: const [],
+        incrementCameraMove: true,
+      ),
+    );
   }
 
   Future<void> searchPlaces(String query) async {
@@ -118,61 +132,64 @@ class LocationCubit extends Cubit<LocationState> {
       final results = await _repository.searchPlaces(query);
       emit(state.copyWith(suggestions: results));
     } catch (_) {
-      emit(state.copyWith(
-        suggestions: const [],
-        message: 'Unable to search places right now.',
-        status: LocationStatus.error,
-      ));
+      emit(
+        state.copyWith(
+          suggestions: const [],
+          message: 'Unable to search places right now.',
+          status: LocationStatus.error,
+        ),
+      );
     }
   }
 
   Future<void> selectSuggestion(PlaceSuggestion suggestion) async {
-    emit(state.copyWith(
-      status: LocationStatus.loading,
-      message: null,
-    ));
+    emit(state.copyWith(status: LocationStatus.loading, message: null));
 
     try {
       final point = await _repository.getPlaceLocation(suggestion.placeId);
       if (point == null) {
-        emit(state.copyWith(
-          status: LocationStatus.error,
-          message: 'Unable to get selected place details.',
-        ));
+        emit(
+          state.copyWith(
+            status: LocationStatus.error,
+            message: 'Unable to get selected place details.',
+          ),
+        );
         return;
       }
 
-      emit(state.copyWith(
-        status: LocationStatus.ready,
-        selectedLocation: LatLng(point.latitude, point.longitude),
-        selectedAddress: suggestion.description,
-        suggestions: const [],
-        saveSuccess: false,
-        incrementCameraMove: true,
-      ));
+      emit(
+        state.copyWith(
+          status: LocationStatus.ready,
+          selectedLocation: LatLng(point.latitude, point.longitude),
+          selectedAddress: suggestion.description,
+          suggestions: const [],
+          saveSuccess: false,
+          incrementCameraMove: true,
+        ),
+      );
     } catch (_) {
-      emit(state.copyWith(
-        status: LocationStatus.error,
-        message: 'Unable to get selected place details.',
-      ));
+      emit(
+        state.copyWith(
+          status: LocationStatus.error,
+          message: 'Unable to get selected place details.',
+        ),
+      );
     }
   }
 
   Future<void> saveSelectedLocation() async {
     final target = state.selectedLocation ?? state.currentLocation;
     if (target == null) {
-      emit(state.copyWith(
-        message: 'Select a location before saving.',
-        status: LocationStatus.error,
-      ));
+      emit(
+        state.copyWith(
+          message: 'Select a location before saving.',
+          status: LocationStatus.error,
+        ),
+      );
       return;
     }
 
-    emit(state.copyWith(
-      isSaving: true,
-      saveSuccess: false,
-      message: null,
-    ));
+    emit(state.copyWith(isSaving: true, saveSuccess: false, message: null));
 
     try {
       final response = await _repository.sendLocation(
@@ -181,27 +198,33 @@ class LocationCubit extends Cubit<LocationState> {
         address: state.selectedAddress,
       );
 
-      emit(state.copyWith(
-        status: LocationStatus.ready,
-        isSaving: false,
-        saveSuccess: true,
-        lastResponse: response,
-        message: response.message ?? 'Location saved successfully.',
-      ));
+      emit(
+        state.copyWith(
+          status: LocationStatus.ready,
+          isSaving: false,
+          saveSuccess: true,
+          lastResponse: response,
+          message: response.message ?? 'User loction dispatched successfully.',
+        ),
+      );
     } on ApiException catch (error) {
-      emit(state.copyWith(
-        isSaving: false,
-        saveSuccess: false,
-        status: LocationStatus.error,
-        message: error.message,
-      ));
+      emit(
+        state.copyWith(
+          isSaving: false,
+          saveSuccess: false,
+          status: LocationStatus.error,
+          message: error.message,
+        ),
+      );
     } catch (_) {
-      emit(state.copyWith(
-        isSaving: false,
-        saveSuccess: false,
-        status: LocationStatus.error,
-        message: 'Unable to save location. Please try again.',
-      ));
+      emit(
+        state.copyWith(
+          isSaving: false,
+          saveSuccess: false,
+          status: LocationStatus.error,
+          message: 'Unable to save location. Please try again.',
+        ),
+      );
     }
   }
 
@@ -213,10 +236,12 @@ class LocationCubit extends Cubit<LocationState> {
   Future<bool> _ensurePermission() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      emit(state.copyWith(
-        status: LocationStatus.error,
-        message: 'Please enable location services.',
-      ));
+      emit(
+        state.copyWith(
+          status: LocationStatus.error,
+          message: 'Please enable location services.',
+        ),
+      );
       return false;
     }
 
@@ -227,16 +252,16 @@ class LocationCubit extends Cubit<LocationState> {
 
     if (permission == LocationPermission.deniedForever ||
         permission == LocationPermission.denied) {
-      emit(state.copyWith(
-        status: LocationStatus.permissionDenied,
-        message:
-            'Location permissions are permanently denied. Please enable them from settings.',
-      ));
+      emit(
+        state.copyWith(
+          status: LocationStatus.permissionDenied,
+          message:
+              'Location permissions are permanently denied. Please enable them from settings.',
+        ),
+      );
       return false;
     }
 
     return true;
   }
 }
-
-

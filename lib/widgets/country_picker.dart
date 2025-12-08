@@ -31,11 +31,13 @@ class CountryPicker {
               }).toList();
             }
 
-            return Container(
-              color: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-              height: MediaQuery.of(context).size.height * 0.8,
-              child: Column(
+            return GestureDetector(
+              onTap: () => FocusScope.of(context).unfocus(),
+              child: Container(
+                color: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+                height: MediaQuery.of(context).size.height * 0.8,
+                child: Column(
                 children: [
                   const Text(
                     'Select Country',
@@ -100,6 +102,7 @@ class CountryPicker {
                     ),
                   ),
                 ],
+              ),
               ),
             );
           },

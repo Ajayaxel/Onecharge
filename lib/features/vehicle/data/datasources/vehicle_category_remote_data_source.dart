@@ -14,30 +14,51 @@ class VehicleCategoryRemoteDataSource {
   Future<List<VehicleCategory>> fetchVehicleCategories() async {
     try {
       final token = await TokenStorage.readToken();
-      if (token == null || token.isEmpty) {
-        throw  ApiException('Please login to continue.');
+      
+      // Build headers - only include Authorization if token exists
+      final headers = <String, dynamic>{
+        'Accept': 'application/json',
+      };
+      
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
       }
 
       final response = await _dio.get(
         ApiConfig.vehicleCategories,
         options: Options(
-          headers: {
-            'Authorization': 'Bearer $token',
-          },
+          headers: headers,
         ),
       );
+      print('Vehicle categories response: ${response.data}');
       final data = response.data;
 
       if (data is Map<String, dynamic>) {
         final success = data['success'] == true;
+        print('✅ Success flag: $success');
         if (success) {
+          final dataMap = data['data'] as Map<String, dynamic>?;
+          print('📦 Data map: $dataMap');
           final rawCategories =
-              (data['vehicle_categories'] as List<dynamic>? ?? <dynamic>[]);
+              (dataMap?['vehicle_types'] as List<dynamic>? ?? <dynamic>[]);
+          print('📋 Raw categories count: ${rawCategories.length}');
+          
           final categories = rawCategories
               .whereType<Map<String, dynamic>>()
+              .where((json) {
+                // Filter by status if it exists, otherwise include all
+                final status = json['status'];
+                final name = json['name'] as String? ?? '';
+                final hasValidName = name.trim().isNotEmpty;
+                final isActive = status == null || status == true;
+                return hasValidName && isActive;
+              })
               .map(VehicleCategory.fromJson)
-              .where((category) => category.name.isNotEmpty)
               .toList();
+          
+          print('✅ Parsed categories count: ${categories.length}');
+          print('📝 Categories: ${categories.map((c) => '${c.id}: ${c.name}').join(', ')}');
+          
           return categories;
         }
         throw ApiException(
@@ -47,13 +68,15 @@ class VehicleCategoryRemoteDataSource {
 
       throw ApiException('Unexpected response while loading vehicle categories.');
     } on DioException catch (error) {
+      final statusCode = error.response?.statusCode;
+      
       final message = error.response?.data is Map<String, dynamic>
           ? (error.response!.data['message'] as String? ??
               'Failed to load vehicle categories.')
           : 'Failed to load vehicle categories.';
       throw ApiException(
         message,
-        statusCode: error.response?.statusCode,
+        statusCode: statusCode,
       );
     } on ApiException {
       rethrow;

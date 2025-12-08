@@ -10,8 +10,11 @@ import 'package:onecharge/features/vehicle/data/repositories/brand_repository.da
 import 'package:onecharge/features/vehicle/data/repositories/number_plate_repository.dart';
 import 'package:onecharge/features/vehicle/data/repositories/vehicle_category_repository.dart';
 import 'package:onecharge/features/vehicle/presentation/bloc/brand_bloc.dart';
+import 'package:onecharge/features/vehicle/presentation/bloc/model_bloc.dart';
 import 'package:onecharge/features/vehicle/presentation/bloc/number_plate_bloc.dart';
 import 'package:onecharge/features/vehicle/presentation/bloc/vehicle_category_bloc.dart';
+import 'package:onecharge/features/vehicle/data/repositories/model_repository.dart';
+import 'package:onecharge/features/vehicle/data/datasources/model_remote_data_source.dart';
 import 'package:onecharge/resources/app_resources.dart';
 import 'package:onecharge/screen/home/home_screen.dart';
 import 'package:onecharge/screen/login/phone_login.dart';
@@ -33,6 +36,7 @@ class _VehicleSelectionState extends State<VehicleSelection> {
   SubModel? _selectedSubModel; // Track selected sub-model
   late final VehicleCategoryBloc _vehicleCategoryBloc;
   late final BrandBloc _brandBloc;
+  late final ModelBloc _modelBloc;
   late final NumberPlateBloc _numberPlateBloc;
 
   @override
@@ -48,6 +52,10 @@ class _VehicleSelectionState extends State<VehicleSelection> {
       BrandRepository(remoteDataSource: BrandRemoteDataSource()),
     );
 
+    _modelBloc = ModelBloc(
+      ModelRepository(remoteDataSource: ModelRemoteDataSource()),
+    );
+
     _numberPlateBloc = NumberPlateBloc(NumberPlateRepository());
   }
 
@@ -55,6 +63,7 @@ class _VehicleSelectionState extends State<VehicleSelection> {
   void dispose() {
     _vehicleCategoryBloc.close();
     _brandBloc.close();
+    _modelBloc.close();
     _numberPlateBloc.close();
     super.dispose();
   }
@@ -65,11 +74,14 @@ class _VehicleSelectionState extends State<VehicleSelection> {
       providers: [
         BlocProvider.value(value: _vehicleCategoryBloc),
         BlocProvider.value(value: _brandBloc),
+        BlocProvider.value(value: _modelBloc),
         BlocProvider.value(value: _numberPlateBloc),
       ],
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        body: SafeArea(
+      child: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Scaffold(
+          backgroundColor: Colors.white,
+          body: SafeArea(
           child: BlocListener<VehicleCategoryBloc, VehicleCategoryState>(
             listener: _handleVehicleCategoryState,
             child: Padding(
@@ -77,9 +89,7 @@ class _VehicleSelectionState extends State<VehicleSelection> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 40),
-
-                  // Back button when viewing sub-models
+                  // Back button when viewing sub-models - Top aligned
                   if (_selectedBrand != null) ...[
                     GestureDetector(
                       onTap: () {
@@ -91,7 +101,7 @@ class _VehicleSelectionState extends State<VehicleSelection> {
                       child: Row(
                         children: [
                           Icon(
-                            Icons.arrow_back,
+                            Icons.arrow_back_ios_new,
                             color: AppColors.textColor,
                             size: 24,
                           ),
@@ -108,6 +118,8 @@ class _VehicleSelectionState extends State<VehicleSelection> {
                     ),
                     const SizedBox(height: 20),
                   ],
+
+                  if (_selectedBrand == null) const SizedBox(height: 40),
 
                   // Title - Centered
                   const Center(
@@ -145,6 +157,7 @@ class _VehicleSelectionState extends State<VehicleSelection> {
               ),
             ),
           ),
+        ),
         ),
       ),
     );
@@ -491,8 +504,8 @@ class _VehicleSelectionState extends State<VehicleSelection> {
           return GridView.builder(
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
-              crossAxisSpacing: 2,
-              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 16,
               childAspectRatio: 1.0,
             ),
             itemCount: brands.length,
@@ -505,95 +518,90 @@ class _VehicleSelectionState extends State<VehicleSelection> {
                     _selectedBrand = brand;
                     _selectedSubModel = null; // Reset sub-model selection
                   });
+                  // Fetch models for the selected brand
+                  print('🟢 [VehicleSelection] Brand selected: ${brand.name} (id: ${brand.id})');
+                  print('🟢 [VehicleSelection] Dispatching ModelsFetched event for brandId: ${brand.id}');
+                  _modelBloc.add(
+                    ModelsFetched(
+                      brandId: brand.id,
+                      brandName: brand.name,
+                    ),
+                  );
                 },
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: brand.logo.startsWith('http')
-                      ? Image.network(
-                          brand.logo,
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Center(
-                              child: CircularProgressIndicator(
-                                value:
-                                    loadingProgress.expectedTotalBytes != null
-                                    ? loadingProgress.cumulativeBytesLoaded /
-                                          loadingProgress.expectedTotalBytes!
-                                    : null,
-                                strokeWidth: 2,
-                              ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            return Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(
-                                    Icons.error_outline,
-                                    color: Colors.red,
-                                    size: 24,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4.0,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.grey.shade200,
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        spreadRadius: 1,
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: brand.logo.startsWith('http')
+                        ? Image.network(
+                            brand.logo,
+                            fit: BoxFit.contain,
+                            width: double.infinity,
+                            height: double.infinity,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Center(
+                                child: CircularProgressIndicator(
+                                  value:
+                                      loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded /
+                                            loadingProgress.expectedTotalBytes!
+                                      : null,
+                                  strokeWidth: 2,
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) {
+                              return Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(
+                                      Icons.error_outline,
+                                      color: Colors.grey,
+                                      size: 32,
                                     ),
-                                    child: Text(
-                                      brand.name,
-                                      style: TextStyle(
-                                        fontSize: 8,
-                                        color: Colors.grey.shade600,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                                  ],
+                                ),
+                              );
+                            },
+                          )
+                        : Image.asset(
+                            brand.logo,
+                            fit: BoxFit.contain,
+                            width: double.infinity,
+                            height: double.infinity,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(
+                                      Icons.error_outline,
+                                      color: Colors.grey,
+                                      size: 32,
                                     ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        )
-                      : Image.asset(
-                          brand.logo,
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(
-                                    Icons.error_outline,
-                                    color: Colors.red,
-                                    size: 24,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4.0,
-                                    ),
-                                    child: Text(
-                                      brand.name,
-                                      style: TextStyle(
-                                        fontSize: 8,
-                                        color: Colors.grey.shade600,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                  ),
                 ),
               );
             },
@@ -605,24 +613,67 @@ class _VehicleSelectionState extends State<VehicleSelection> {
   }
 
   Widget _buildSubModelsView() {
-    // Use submodels from the selected brand (from API)
-    final subModels = _selectedBrand?.submodels ?? [];
+    return BlocBuilder<ModelBloc, ModelState>(
+      builder: (context, state) {
+        if (state is ModelLoading || state is ModelInitial) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (state is ModelError) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, color: Colors.red.shade400, size: 48),
+                const SizedBox(height: 16),
+                Text(
+                  state.message,
+                  style: TextStyle(fontSize: 14, color: Colors.red.shade400),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: () {
+                    if (_selectedBrand != null) {
+                      _modelBloc.add(
+                        ModelsFetched(
+                          brandId: _selectedBrand!.id,
+                          brandName: _selectedBrand!.name,
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          );
+        }
+        if (state is ModelEmpty) {
+          return const Center(
+            child: Text(
+              'No models available for this brand',
+              style: TextStyle(color: Colors.grey),
+            ),
+          );
+        }
+        if (state is ModelLoaded) {
+          final subModels = state.models;
 
-    if (subModels.isEmpty) {
-      return const Center(
-        child: Text(
-          "No sub-models available for this brand",
-          style: TextStyle(color: Colors.grey),
-        ),
-      );
-    }
+          if (subModels.isEmpty) {
+            return const Center(
+              child: Text(
+                "No sub-models available for this brand",
+                style: TextStyle(color: Colors.grey),
+              ),
+            );
+          }
 
-    return GridView.builder(
+          return GridView.builder(
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
-        childAspectRatio: 0.85,
+        childAspectRatio: 1.0,
       ),
       itemCount: subModels.length,
       itemBuilder: (context, index) {
@@ -639,80 +690,85 @@ class _VehicleSelectionState extends State<VehicleSelection> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isSelected ? Colors.black : Colors.white,
+                color: isSelected ? Colors.black : Colors.grey.shade200,
                 width: isSelected ? 2 : 1,
               ),
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.white.withOpacity(0.1),
-                  spreadRadius: 2,
-                  blurRadius: 5,
-                  offset: const Offset(0, 3),
+                  color: Colors.black.withOpacity(0.05),
+                  spreadRadius: 1,
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
             child: Column(
               children: [
                 Expanded(
-                  child: subModel.submodelImage.startsWith('http')
-                      ? Image.network(
-                          subModel.submodelImage,
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Center(
-                              child: CircularProgressIndicator(
-                                value:
-                                    loadingProgress.expectedTotalBytes != null
-                                    ? loadingProgress.cumulativeBytesLoaded /
-                                          loadingProgress.expectedTotalBytes!
-                                    : null,
-                                strokeWidth: 2,
-                              ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: Colors.grey.shade200,
-                              child: const Center(
-                                child: Icon(
-                                  Icons.error_outline,
-                                  color: Colors.grey,
-                                  size: 40,
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(11),
+                    ),
+                    child: subModel.submodelImage.startsWith('http')
+                        ? Image.network(
+                            subModel.submodelImage,
+                            fit: BoxFit.contain,
+                            width: double.infinity,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Center(
+                                child: CircularProgressIndicator(
+                                  value:
+                                      loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded /
+                                            loadingProgress.expectedTotalBytes!
+                                      : null,
+                                  strokeWidth: 2,
                                 ),
-                              ),
-                            );
-                          },
-                        )
-                      : Image.asset(
-                          subModel.submodelImage,
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: Colors.grey.shade200,
-                              child: const Center(
-                                child: Icon(
-                                  Icons.error_outline,
-                                  color: Colors.grey,
-                                  size: 40,
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Colors.grey.shade100,
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.error_outline,
+                                    color: Colors.grey,
+                                    size: 40,
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
-                        ),
+                              );
+                            },
+                          )
+                        : Image.asset(
+                            subModel.submodelImage,
+                            fit: BoxFit.contain,
+                            width: double.infinity,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Colors.grey.shade100,
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.error_outline,
+                                    color: Colors.grey,
+                                    size: 40,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  padding: const EdgeInsets.only(bottom: 16.0, top: 8.0),
                   child: Text(
                     subModel.submodelName,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: 16,
                       color: AppColors.textColor,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ),
@@ -720,6 +776,10 @@ class _VehicleSelectionState extends State<VehicleSelection> {
             ),
           ),
         );
+      },
+        );
+        }
+        return const SizedBox.shrink();
       },
     );
   }
@@ -806,6 +866,7 @@ class _VehicleSelectionState extends State<VehicleSelection> {
                 // Vehicle Number Input Field
                 TextField(
                   controller: vehicleNumberController,
+                  textCapitalization: TextCapitalization.characters,
                   decoration: InputDecoration(
                     hintText: "Vehicle Number",
                     hintStyle: TextStyle(color: Colors.grey.shade400),
@@ -866,6 +927,9 @@ class _VehicleSelectionState extends State<VehicleSelection> {
                         name: vehicleName,
                         number: savedPlate,
                         image: vehicleImage,
+                        vehicleTypeId: _selectedCategoryId,
+                        brandId: _selectedBrand?.id,
+                        modelId: _selectedSubModel?.submodelId,
                       );
 
                       Navigator.of(bottomSheetContext).pop();
@@ -883,6 +947,7 @@ class _VehicleSelectionState extends State<VehicleSelection> {
                       text: "Submit",
                       isLoading: state.isLoading,
                       onPressed: () {
+                        FocusScope.of(bottomSheetContext).unfocus();
                         final vehicleNumber = vehicleNumberController.text
                             .trim();
                         if (vehicleNumber.isEmpty) {

@@ -24,6 +24,7 @@ class _UserInfoState extends State<UserInfo> {
   }
 
   void _onContinue() {
+    FocusScope.of(context).unfocus();
     // Handle continue action
     final fullName = _fullNameController.text;
     final email = _emailController.text;
@@ -44,9 +45,11 @@ class _UserInfoState extends State<UserInfo> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -55,7 +58,7 @@ class _UserInfoState extends State<UserInfo> {
               // Back button
               IconButton(
                 icon: const Icon(
-                  Icons.arrow_back,
+                  Icons.arrow_back_ios_new,
                   color: Colors.black,
                   size: 24,
                 ),
@@ -215,6 +218,7 @@ class _UserInfoState extends State<UserInfo> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

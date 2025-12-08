@@ -12,10 +12,17 @@ class SubModel extends Equatable {
   final String submodelImage;
 
   factory SubModel.fromJson(Map<String, dynamic> json) {
+    // Handle both old format (submodel_id, submodel_name, submodel_image) 
+    // and new format (id, name, image, brand_id)
+    final id = (json['id'] as num?)?.toInt() ?? 
+               (json['submodel_id'] as num?)?.toInt() ?? 0;
+    final name = (json['name'] as String? ?? json['submodel_name'] as String? ?? '').trim();
+    final image = (json['image'] as String? ?? json['submodel_image'] as String? ?? '').trim();
+    
     return SubModel(
-      submodelId: (json['submodel_id'] as num?)?.toInt() ?? 0,
-      submodelName: (json['submodel_name'] as String? ?? '').trim(),
-      submodelImage: (json['submodel_image'] as String? ?? '').trim(),
+      submodelId: id,
+      submodelName: name,
+      submodelImage: image,
     );
   }
 

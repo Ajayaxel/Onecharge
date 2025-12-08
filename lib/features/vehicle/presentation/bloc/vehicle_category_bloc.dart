@@ -22,15 +22,21 @@ class VehicleCategoryBloc
   ) async {
     emit(VehicleCategoryLoading());
     try {
+      print('🟢 [VehicleCategoryBloc] Fetching vehicle categories...');
       final categories = await _repository.getVehicleCategories();
+      print('✅ [VehicleCategoryBloc] Received ${categories.length} categories');
       if (categories.isEmpty) {
+        print('⚠️ [VehicleCategoryBloc] Categories list is empty');
         emit(const VehicleCategoryEmpty());
         return;
       }
+      print('✅ [VehicleCategoryBloc] Emitting VehicleCategoryLoaded with ${categories.length} categories');
       emit(VehicleCategoryLoaded(categories));
     } on ApiException catch (error) {
+      print('❌ [VehicleCategoryBloc] ApiException: ${error.message}');
       emit(VehicleCategoryError(error.message));
-    } catch (_) {
+    } catch (e) {
+      print('❌ [VehicleCategoryBloc] Unexpected error: $e');
       emit(const VehicleCategoryError('Unable to load vehicle categories.'));
     }
   }

@@ -39,12 +39,35 @@ class LoginBloc extends Bloc<LoginEvent, LoginState>
         ),
       );
     } on ApiException catch (error) {
-      emit(
-        state.copyWith(
-          status: LoginStatus.failure,
-          message: error.message,
-        ),
-      );
+      // Check if this is a 403 error with email verification requirement
+      final messageLower = error.message.toLowerCase();
+      final isEmailVerificationError = error.statusCode == 403 &&
+          (messageLower.contains('verify your email') ||
+           messageLower.contains('verify') && messageLower.contains('email') ||
+           messageLower.contains('otp') ||
+           messageLower.contains('verification code') ||
+           messageLower.contains('email verification'));
+      
+      if (isEmailVerificationError) {
+        // Use email from error response, or fallback to email from login event
+        final email = error.email ?? event.email;
+        // Navigate to OTP verification screen
+        emit(
+          state.copyWith(
+            status: LoginStatus.requiresVerification,
+            message: error.message,
+            email: email,
+            requiresVerification: true,
+          ),
+        );
+      } else {
+        emit(
+          state.copyWith(
+            status: LoginStatus.failure,
+            message: error.message,
+          ),
+        );
+      }
     } catch (_) {
       emit(
         state.copyWith(

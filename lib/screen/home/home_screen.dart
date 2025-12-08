@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:onecharge/const/onebtn.dart';
 import 'package:onecharge/core/storage/vehicle_storage.dart';
 import 'package:onecharge/features/issue_report/data/repositories/issue_report_repository.dart';
 import 'package:onecharge/features/issue_report/presentation/bloc/issue_report_bloc.dart';
@@ -34,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _searchFocusNode.addListener(() {
       if (!_searchFocusNode.hasFocus) {
         _locationCubit.clearSuggestions();
+        
       }
     });
     _loadVehicleInfo();
@@ -76,15 +76,14 @@ class _HomeScreenState extends State<HomeScreen> {
           if (message == null) return;
           final color = state.saveSuccess ? Colors.green : Colors.red;
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(message),
-              backgroundColor: color,
-            ),
+            SnackBar(content: Text(message), backgroundColor: color),
           );
         },
-        child: Scaffold(
-          body: Stack(
-            children: [
+        child: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: Scaffold(
+            body: Stack(
+              children: [
               // Map Background
               const Positioned.fill(child: HomeGoogleMap()),
 
@@ -96,7 +95,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 8),
                     _buildSearchSection(),
                     const SizedBox(height: 12),
-                    _buildChipsSection(),
                   ],
                 ),
               ),
@@ -110,9 +108,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     builder: (context) => FloatingActionButton(
                       heroTag: 'my_location_fab',
                       backgroundColor: Colors.white,
-                      onPressed: () =>
-                          context.read<LocationCubit>().refreshCurrentLocation(),
-                      child: const Icon(Icons.my_location, color: Colors.black87),
+                      onPressed: () => context
+                          .read<LocationCubit>()
+                          .refreshCurrentLocation(),
+                      child: const Icon(
+                        Icons.my_location,
+                        color: Colors.black87,
+                      ),
                     ),
                   ),
                 ),
@@ -133,13 +135,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           children: [
                             _buildLocationSummary(context, state),
                             const SizedBox(height: 12),
-                            OneBtn(
-                              text: 'Send location to dispatch',
-                              isLoading: state.isSaving,
-                              onPressed: () => context
-                                  .read<LocationCubit>()
-                                  .saveSelectedLocation(),
-                            ),
+                            // OneBtn(
+                            //   text: 'Send location to dispatch',
+                            //   isLoading: state.isSaving,
+                            //   onPressed: () => context
+                            //       .read<LocationCubit>()
+                            //       .saveSelectedLocation(),
+                            // ),
                             const SizedBox(height: 12),
                             _buildIssueReportButton(),
                           ],
@@ -151,6 +153,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
+        ),
         ),
       ),
     );
@@ -198,12 +201,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(width: 8),
-                Icon(
-                  Icons.keyboard_arrow_down,
-                  color: Colors.grey.shade600,
-                  size: 20,
-                ),
+                SizedBox(width: 10,)
+               
               ],
             ),
           ),
@@ -286,25 +285,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color.fromRGBO(0, 0, 0, 0.1),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: IconButton(
-                  icon: Icon(Icons.tune, color: Colors.grey.shade800),
-                  onPressed: () {},
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -340,70 +320,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       onTap: () {
                         _searchController.text = suggestion.description;
                         _searchFocusNode.unfocus();
-                        context
-                            .read<LocationCubit>()
-                            .selectSuggestion(suggestion);
+                        context.read<LocationCubit>().selectSuggestion(
+                          suggestion,
+                        );
                       },
                     );
                   },
-                  separatorBuilder: (_, __) => const Divider(
-                    height: 1,
-                    color: Color(0xFFE9E9E9),
-                  ),
+                  separatorBuilder: (_, __) =>
+                      const Divider(height: 1, color: Color(0xFFE9E9E9)),
                   itemCount: state.suggestions.length,
                 ),
               );
             },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChipsSection() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            _buildChip('Auto-detect via GPS', Icons.gps_fixed),
-            _buildChip('Manual pin drop', Icons.push_pin_outlined),
-            _buildChip('Search & dispatch', Icons.route_outlined),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildChip(String text, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: const Color.fromRGBO(0, 0, 0, 0.08),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: AppColors.primaryColor),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: AppColors.textColor,
-            ),
           ),
         ],
       ),
@@ -470,10 +398,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Expanded(
                 child: Text(
                   'Tap map to place pin or drag the marker to refine manual location.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade700,
-                  ),
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
                 ),
               ),
             ],
@@ -514,10 +439,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 4),
             Text(
               value.toStringAsFixed(6),
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -529,11 +451,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
+        color: Colors.black,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.primaryColor,
-          width: 2,
-        ),
+        border: Border.all(color: Colors.white, width: 2),
       ),
       child: Material(
         color: Colors.transparent,
@@ -543,9 +463,7 @@ class _HomeScreenState extends State<HomeScreen> {
               context,
               MaterialPageRoute(
                 builder: (context) => BlocProvider(
-                  create: (context) => IssueReportBloc(
-                    IssueReportRepository(),
-                  ),
+                  create: (context) => IssueReportBloc(IssueReportRepository()),
                   child: const IssueReportScreen(),
                 ),
               ),
@@ -555,28 +473,27 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
               children: [
+                SizedBox(width: 20),
                 Icon(
                   Icons.report_problem_outlined,
-                  color: AppColors.primaryColor,
+                  color: Colors.red,
                   size: 22,
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 15),
                 Text(
                   'Report an Issue',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.primaryColor,
+                    color: Colors.white,
                   ),
                 ),
-                const SizedBox(width: 8),
-                Icon(
-                  Icons.arrow_forward_ios,
-                  color: AppColors.primaryColor,
-                  size: 16,
-                ),
+                SizedBox(width: 15),
+                Icon(Icons.arrow_forward_ios, color: Colors.black, size: 16),
+                SizedBox(width: 20),
               ],
             ),
           ),

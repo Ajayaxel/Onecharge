@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:onecharge/const/onebtn.dart';
 import 'package:onecharge/resources/app_resources.dart';
+import 'package:onecharge/features/issue_report/data/models/ticket_response.dart';
+import 'package:onecharge/screen/issue_report/issue_status_screen.dart';
 
 class SuccessScreen extends StatelessWidget {
   const SuccessScreen({
     super.key,
     this.isSuccess = true,
     this.message,
+    this.ticket,
   });
 
   final bool isSuccess;
   final String? message;
+  final Ticket? ticket;
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +55,42 @@ class SuccessScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
+              // Ticket ID (only for success with ticket)
+              if (isSuccess && ticket != null && ticket!.ticketId.isNotEmpty) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AppColors.primaryColor.withOpacity(0.3),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'Ticket ID',
+                        style: TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        ticket!.ticketId,
+                        style: const TextStyle(
+                          color: AppColors.primaryColor,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               // Description
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32.0),
@@ -67,17 +107,57 @@ class SuccessScreen extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              // Done/Retry Button
-              OneBtn(
-                text: isSuccess ? 'Done' : 'Go Back',
-                onPressed: () {
-                  if (isSuccess) {
-                    Navigator.of(context).popUntil((route) => route.isFirst);
-                  } else {
-                    Navigator.of(context).pop();
-                  }
-                },
-              ),
+              // Done Button
+              if (isSuccess && ticket != null)
+                OneBtn(
+                  text: 'Done',
+                  onPressed: () {
+                    print('🟡 [SuccessScreen] Navigating to IssueStatusScreen');
+                    print('🟡 [SuccessScreen] Ticket ID: "${ticket!.ticketId}"');
+                    print('🟡 [SuccessScreen] Ticket ID is empty: ${ticket!.ticketId.isEmpty}');
+                    
+                    if (ticket!.ticketId.isEmpty) {
+                      print('❌ [SuccessScreen] ERROR: Ticket ID is empty!');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Error: Ticket ID is missing. Please contact support.'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+                    
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                        builder: (context) => IssueStatusScreen(
+                          ticketIdInt: ticket!.id, // Use numerical ID, not string ticket_id
+                          initialTicket: ticket, // Pass the ticket data we already have
+                        ),
+                      ),
+                    );
+                  },
+                )
+              else
+                OneBtn(
+                  text: isSuccess ? 'Done' : 'Go Back',
+                  onPressed: () {
+                    if (isSuccess) {
+                      print('🟡 [SuccessScreen] Navigating to IssueStatusScreen (fallback)');
+                      print('🟡 [SuccessScreen] Ticket: ${ticket?.ticketId ?? "null"}');
+                      
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(
+                          builder: (context) => IssueStatusScreen(
+                            ticketIdInt: ticket?.id, // Use numerical ID, not string ticket_id
+                            initialTicket: ticket, // Pass the ticket data we already have
+                          ),
+                        ),
+                      );
+                    } else {
+                      Navigator.of(context).pop();
+                    }
+                  },
+                ),
             ],
           ),
         ),

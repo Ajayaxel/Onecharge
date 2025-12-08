@@ -19,19 +19,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     OnboardingPageData(
       title: "Discover",
       description:
-          "Lorem Ipsum is simply dummy text of the printing\nand typesetting industry. Lorem Ipsum Lorem\nIpsum is simply dummy text",
+          "From low battery to flat tyres — OneCharge\ngets you moving again, fast.",
       image: AppOnbordImages.onbord1,
     ),
     OnboardingPageData(
       title: "Discover",
       description:
-            "Lorem Ipsum is simply dummy text of the printing\nand typesetting industry. Lorem Ipsum Lorem\nIpsum is simply dummy text",
+            "Book mechanical help, battery swaps, or\ntowing with one app",
       image: AppOnbordImages.onbord3,
     ),
     OnboardingPageData(
       title: "Discover",
       description:
-           "Lorem Ipsum is simply dummy text of the printing\nand typesetting industry. Lorem Ipsum Lorem\nIpsum is simply dummy text",
+           "Share your issue with photos or video\n— we handle the rest.",
       image: AppOnbordImages.onbord2,
     ),
   ];
@@ -85,7 +85,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   SizedBox(height: isSmallScreen ? 12 : 16),
                   Text(
-                    "Electric vehicle charging station for everyone.\nDiscover. Charge. Pay.",
+                    "OneCharge delivers quick, reliable EV support\nanytime you need it.",
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: isSmallScreen ? 12 : 14,

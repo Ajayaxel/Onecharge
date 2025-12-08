@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:onecharge/const/onebtn.dart';
+import 'package:onecharge/core/error/api_exception.dart';
+import 'package:onecharge/features/auth/data/repositories/auth_repository.dart';
 import 'package:onecharge/resources/app_resources.dart';
-import 'package:onecharge/screen/login/user_info.dart';
+import 'package:onecharge/screen/login/phone_login.dart';
+import 'package:onecharge/widgets/crypto_loading.dart';
 
 class OtpVerification extends StatefulWidget {
-  final String phoneNumber;
+  final String email;
 
-  const OtpVerification({super.key, required this.phoneNumber});
+  const OtpVerification({super.key, required this.email});
 
   @override
   State<OtpVerification> createState() => _OtpVerificationState();
@@ -20,6 +23,9 @@ class _OtpVerificationState extends State<OtpVerification> {
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
   int _timerSeconds = 24;
   bool _isTimerActive = true;
+  bool _isVerifying = false;
+  bool _isResending = false;
+  final _authRepository = AuthRepository();
 
   @override
   void initState() {
@@ -64,36 +70,95 @@ class _OtpVerificationState extends State<OtpVerification> {
     return _controllers.map((controller) => controller.text).join();
   }
 
-  void _onContinue() {
+  Future<void> _onContinue() async {
     final otp = _getOtpCode();
-    if (otp.length == 6) {
-      // Handle OTP verification
-      // You can add your API call here
-      print('OTP entered: $otp');
-      
-      // Navigate to UserInfo page
-      Navigator.push(
+    if (otp.length != 6) {
+      _showSnackBar('Please enter the complete 6-digit OTP code');
+      return;
+    }
+
+    if (_isVerifying) return;
+
+    setState(() {
+      _isVerifying = true;
+    });
+
+    try {
+      final response = await _authRepository.verifyOtp(
+        email: widget.email,
+        otp: otp,
+      );
+
+      if (!mounted) return;
+
+      _showSnackBar(response.message);
+
+      // Navigate to login screen after successful verification
+      Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => const UserInfo(),
+          builder: (context) => const PhoneLogin(),
         ),
       );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      _showSnackBar(error.message);
+    } catch (e) {
+      if (!mounted) return;
+      _showSnackBar('Something went wrong. Please try again.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isVerifying = false;
+        });
+      }
     }
   }
 
-  void _onResendCode() {
-    if (!_isTimerActive) {
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _onResendCode() async {
+    if (!_isTimerActive && !_isResending) {
       setState(() {
-        _timerSeconds = 24;
-        _isTimerActive = true;
-        // Clear all OTP fields
-        for (var controller in _controllers) {
-          controller.clear();
-        }
-        _focusNodes[0].requestFocus();
+        _isResending = true;
       });
-      _startTimer();
-      // You can add your resend OTP API call here
+
+      try {
+        final response = await _authRepository.resendOtp(
+          email: widget.email,
+        );
+
+        if (!mounted) return;
+
+        _showSnackBar(response.message);
+
+        setState(() {
+          _timerSeconds = 24;
+          _isTimerActive = true;
+          // Clear all OTP fields
+          for (var controller in _controllers) {
+            controller.clear();
+          }
+          _focusNodes[0].requestFocus();
+        });
+        _startTimer();
+      } on ApiException catch (error) {
+        if (!mounted) return;
+        _showSnackBar(error.message);
+      } catch (e) {
+        if (!mounted) return;
+        _showSnackBar('Something went wrong. Please try again.');
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isResending = false;
+          });
+        }
+      }
     }
   }
 
@@ -116,9 +181,11 @@ class _OtpVerificationState extends State<OtpVerification> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -129,7 +196,7 @@ class _OtpVerificationState extends State<OtpVerification> {
                 alignment: Alignment.centerLeft,
                 child: IconButton(
                   icon: const Icon(
-                    Icons.arrow_back,
+                    Icons.arrow_back_ios_new,
                     color: Colors.black,
                     size: 24,
                   ),
@@ -152,7 +219,7 @@ class _OtpVerificationState extends State<OtpVerification> {
               ),
               const SizedBox(height: 4),
               Text(
-                "code sent to ${widget.phoneNumber}",
+                "code sent to ${widget.email}",
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 20,
@@ -227,42 +294,46 @@ class _OtpVerificationState extends State<OtpVerification> {
               const SizedBox(height: 30),
 
               // Resend code text with timer
-              GestureDetector(
-                onTap: _onResendCode,
-                child: RichText(
-                  textAlign: TextAlign.center,
-                  text: TextSpan(
-                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-                    children: [
-                      const TextSpan(text: "Didn't receive the code? "),
-                      TextSpan(
-                        text: _isTimerActive
-                            ? _formatTimer(_timerSeconds)
-                            : "Resend",
-                        style: TextStyle(
-                          color: _isTimerActive
-                              ? AppColors.textColor
-                              : Colors.blue,
-                          fontWeight: FontWeight.w500,
+              _isResending
+                  ? const CryptoLoading(size: 20)
+                  : GestureDetector(
+                      onTap: _onResendCode,
+                      child: RichText(
+                        textAlign: TextAlign.center,
+                        text: TextSpan(
+                          style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                          children: [
+                            const TextSpan(text: "Didn't receive the code? "),
+                            TextSpan(
+                              text: _isTimerActive
+                                  ? _formatTimer(_timerSeconds)
+                                  : "Resend",
+                              style: TextStyle(
+                                color: _isTimerActive
+                                    ? AppColors.textColor
+                                    : Colors.blue,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              ),
+                    ),
 
               const Spacer(),
 
               // Continue button
               OneBtn(
                 text: "Continue",
-                onPressed: _getOtpCode().length == 6 ? _onContinue : null,
+                isLoading: _isVerifying,
+                onPressed: _isVerifying ? null : _onContinue,
               ),
 
               const SizedBox(height: 30),
             ],
           ),
         ),
+      ),
       ),
     );
   }

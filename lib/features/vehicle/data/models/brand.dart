@@ -23,11 +23,18 @@ class Brand extends Equatable {
         .map((submodelJson) => SubModel.fromJson(submodelJson))
         .toList();
 
+    // Handle both 'logo' and 'image' fields (API uses 'image', can be null)
+    final logo = json['logo'] as String? ?? json['image'] as String? ?? '';
+    
+    // Handle both 'category_id' and 'vehicle_type_id' fields
+    final categoryId = (json['category_id'] as num?)?.toInt() ?? 
+                       (json['vehicle_type_id'] as num?)?.toInt();
+
     return Brand(
       id: (json['id'] as num?)?.toInt() ?? 0,
       name: (json['name'] as String? ?? '').trim(),
-      logo: (json['logo'] as String? ?? '').trim(),
-      categoryId: (json['category_id'] as num?)?.toInt(),
+      logo: logo.trim(),
+      categoryId: categoryId,
       submodels: submodels,
     );
   }

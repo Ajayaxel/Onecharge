@@ -16,26 +16,28 @@ class BrandRemoteDataSource {
     required String categoryName,
   }) async {
     try {
-      print('🔵 [BrandRemoteDataSource] Starting fetchBrandsByCategory for categoryName: $categoryName');
+      print('🔵 [BrandRemoteDataSource] Starting fetchBrandsByCategory for categoryId: $categoryId, categoryName: $categoryName');
       
       final token = await TokenStorage.readToken();
-      print('🔵 [BrandRemoteDataSource] Token exists: ${token != null && token.isNotEmpty}');
-      if (token == null || token.isEmpty) {
-        print('❌ [BrandRemoteDataSource] No token found');
-        throw ApiException('Please login to continue.');
+      
+      // Build headers - only include Authorization if token exists
+      final headers = <String, dynamic>{
+        'Accept': 'application/json',
+      };
+      
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
       }
 
       final url = '${ApiConfig.baseUrl}${ApiConfig.brands}';
       print('🔵 [BrandRemoteDataSource] Request URL: $url');
-      print('🔵 [BrandRemoteDataSource] Category name: $categoryName');
+      print('🔵 [BrandRemoteDataSource] Category ID: $categoryId, Category name: $categoryName');
       
-      // Fetch all brands without query parameters
+      // Fetch all brands
       final response = await _dio.get(
         ApiConfig.brands,
         options: Options(
-          headers: {
-            'Authorization': 'Bearer $token',
-          },
+          headers: headers,
         ),
       );
       
@@ -46,34 +48,35 @@ class BrandRemoteDataSource {
       final data = response.data;
 
       if (data is Map<String, dynamic>) {
-        print('🔵 [BrandRemoteDataSource] Response is Map<String, dynamic>');
-        print('🔵 [BrandRemoteDataSource] Response keys: ${data.keys.toList()}');
+        final success = data['success'] == true;
+        print('✅ [BrandRemoteDataSource] Success flag: $success');
         
-        // Map category name to API key (car, bike, test)
-        final categoryKey = _mapCategoryNameToKey(categoryName);
-        print('🔵 [BrandRemoteDataSource] Mapped category key: $categoryKey');
-
-        if (data.containsKey(categoryKey)) {
-          final rawBrands = data[categoryKey];
-          if (rawBrands is List) {
-            print('✅ [BrandRemoteDataSource] Found brands list for $categoryKey with ${rawBrands.length} entries');
-            final brands = rawBrands
-                .whereType<Map<String, dynamic>>()
-                .map(Brand.fromJson)
-                .where((brand) => brand.name.isNotEmpty && brand.logo.isNotEmpty)
-                .toList();
-            print('✅ [BrandRemoteDataSource] Parsed brands count: ${brands.length}');
-            print('✅ [BrandRemoteDataSource] Brands: ${brands.map((b) => '${b.name} (${b.submodels.length} submodels)').toList()}');
-            return brands;
-          }
-          print('⚠️ [BrandRemoteDataSource] Value for $categoryKey is not a list: ${rawBrands.runtimeType}');
-        } else {
-          print('⚠️ [BrandRemoteDataSource] Key $categoryKey not found in response');
+        if (success) {
+          final dataMap = data['data'] as Map<String, dynamic>?;
+          print('📦 [BrandRemoteDataSource] Data map: $dataMap');
+          
+          final rawBrands = (dataMap?['brands'] as List<dynamic>? ?? <dynamic>[]);
+          print('📋 [BrandRemoteDataSource] Raw brands count: ${rawBrands.length}');
+          
+          // Filter brands by vehicle_type_id matching the selected categoryId
+          final brands = rawBrands
+              .whereType<Map<String, dynamic>>()
+              .where((brandJson) {
+                final vehicleTypeId = (brandJson['vehicle_type_id'] as num?)?.toInt();
+                return vehicleTypeId == categoryId;
+              })
+              .map(Brand.fromJson)
+              .where((brand) => brand.name.isNotEmpty)
+              .toList();
+          
+          print('✅ [BrandRemoteDataSource] Filtered brands count for categoryId $categoryId: ${brands.length}');
+          print('✅ [BrandRemoteDataSource] Brands: ${brands.map((b) => '${b.name} (${b.submodels.length} submodels)').join(', ')}');
+          
+          return brands;
         }
-
-        final availableKeys = data.keys.join(', ');
+        
         throw ApiException(
-          'No brands found for category "$categoryName". Available keys: $availableKeys',
+          data['message'] as String? ?? 'Unable to load brands.',
         );
       }
 
@@ -105,24 +108,5 @@ class BrandRemoteDataSource {
       throw ApiException('Something went wrong. Please try again.');
     }
   }
-}
-
-String _mapCategoryNameToKey(String categoryName) {
-  final normalized = categoryName.trim().toLowerCase();
-  
-  // Map common category names to API keys
-  if (normalized.contains('car') || normalized == 'car') {
-    return 'car';
-  } else if (normalized.contains('bike') || normalized == 'bike') {
-    return 'bike';
-  } else if (normalized.contains('test') || normalized == 'test') {
-    return 'test';
-  } else if (normalized.contains('scooter')) {
-    // Scooter might map to bike or test, defaulting to bike
-    return 'bike';
-  }
-  
-  // Default fallback - try to match any key that contains the category name
-  return normalized;
 }
 

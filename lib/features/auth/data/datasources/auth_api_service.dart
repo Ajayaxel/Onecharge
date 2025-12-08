@@ -8,6 +8,12 @@ import '../models/login_request.dart';
 import '../models/login_response.dart';
 import '../models/register_request.dart';
 import '../models/register_response.dart';
+import '../models/verify_otp_request.dart';
+import '../models/verify_otp_response.dart';
+import '../models/resend_otp_request.dart';
+import '../models/resend_otp_response.dart';
+import '../models/forgot_password_request.dart';
+import '../models/forgot_password_response.dart';
 
 class AuthApiService {
   AuthApiService({Dio? dio}) : _dio = dio ?? ApiClient.instance;
@@ -15,21 +21,98 @@ class AuthApiService {
   final Dio _dio;
 
   Future<LoginResponse> login(LoginRequest request) async {
+    print('🌐 [AuthApiService] Login API call initiated');
+    print('📍 [AuthApiService] Endpoint: ${ApiConfig.login}');
+    print('📝 [AuthApiService] Request data: email=${request.email}');
+    
     try {
+      print('⏳ [AuthApiService] Sending POST request...');
       final response = await _dio.post(
         ApiConfig.login,
         data: request.toJson(),
       );
 
-      return LoginResponse.fromJson(response.data as Map<String, dynamic>);
+      print('✅ [AuthApiService] Response received');
+      print('📊 [AuthApiService] Status code: ${response.statusCode}');
+      print('📦 [AuthApiService] Response data: ${response.data}');
+      
+      print('🔄 [AuthApiService] Parsing response...');
+      final responseData = response.data as Map<String, dynamic>;
+      
+      // Handle new API structure where data is nested under 'data' key
+      Map<String, dynamic> loginData;
+      if (responseData.containsKey('data') && responseData['data'] is Map<String, dynamic>) {
+        final dataMap = responseData['data'] as Map<String, dynamic>;
+        
+        // Extract customer/user - handle both 'customer' and 'user' keys
+        final customerData = dataMap['customer'] as Map<String, dynamic>? ?? 
+                           dataMap['user'] as Map<String, dynamic>?;
+        
+        if (customerData == null) {
+          throw Exception('No customer or user data found in response');
+        }
+        
+        // Extract token and other fields from data
+        loginData = {
+          'message': responseData['message'] as String? ?? '',
+          'user': customerData, // Use customer data as user
+          'token': dataMap['token'] as String? ?? '',
+          'token_type': dataMap['token_type'] as String? ?? 'Bearer',
+          'expires_in': dataMap['expires_in'] as int? ?? 0,
+        };
+        
+        final tokenStr = loginData['token']?.toString() ?? '';
+        print('📋 [AuthApiService] Extracted token: ${tokenStr.isNotEmpty ? tokenStr.substring(0, tokenStr.length > 20 ? 20 : tokenStr.length) + "..." : "empty"}');
+        print('📋 [AuthApiService] Extracted user email: ${customerData['email']}');
+      } else {
+        // Fallback to old structure (direct mapping)
+        loginData = responseData;
+      }
+      
+      final loginResponse = LoginResponse.fromJson(loginData);
+      print('✅ [AuthApiService] Response parsed successfully');
+      print('👤 [AuthApiService] User: ${loginResponse.user.toString()}');
+      print('🎫 [AuthApiService] Token received: ${loginResponse.token.isNotEmpty ? loginResponse.token.substring(0, loginResponse.token.length > 20 ? 20 : loginResponse.token.length) + "..." : "empty"}');
+      
+      return loginResponse;
     } on DioException catch (error) {
+      print('❌ [AuthApiService] DioException occurred');
+      print('🔴 [AuthApiService] Error type: ${error.type}');
+      print('🔴 [AuthApiService] Error message: ${error.message}');
+      
       final statusCode = error.response?.statusCode;
       final data = error.response?.data;
+      
+      print('📊 [AuthApiService] Error status code: $statusCode');
+      print('📦 [AuthApiService] Error response data: $data');
+      
       final message = (data is Map<String, dynamic> ? data['message'] : null) ??
           error.message ??
           'Something went wrong';
-      throw ApiException(message.toString(), statusCode: statusCode);
-    } catch (_) {
+      
+      print('💬 [AuthApiService] Error message: $message');
+      
+      // Extract email from error response if available (for email verification errors)
+      String? email;
+      if (data is Map<String, dynamic>) {
+        // Check if email is in data['data']['email'] (nested structure)
+        if (data.containsKey('data') && data['data'] is Map<String, dynamic>) {
+          final dataMap = data['data'] as Map<String, dynamic>;
+          email = dataMap['email']?.toString();
+        }
+        // Also check if email is directly in data (flat structure)
+        if (email == null && data.containsKey('email')) {
+          email = data['email']?.toString();
+        }
+        if (email != null) {
+          print('📧 [AuthApiService] Extracted email from error: $email');
+        }
+      }
+      
+      throw ApiException(message.toString(), statusCode: statusCode, email: email);
+    } catch (e) {
+      print('❌ [AuthApiService] Unexpected error: $e');
+      print('🔴 [AuthApiService] Error type: ${e.runtimeType}');
       throw ApiException('Unable to process your request');
     }
   }
@@ -161,6 +244,72 @@ class AuthApiService {
           'Something went wrong';
       throw ApiException(message.toString(), statusCode: statusCode);
     } catch (_) {
+      throw ApiException('Unable to process your request');
+    }
+  }
+
+  /// Verify OTP function
+  Future<VerifyOtpResponse> verifyOtp(VerifyOtpRequest request) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.verifyOtp,
+        data: request.toJson(),
+      );
+
+      return VerifyOtpResponse.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (error) {
+      final statusCode = error.response?.statusCode;
+      final data = error.response?.data;
+      final message = (data is Map<String, dynamic> ? data['message'] : null) ??
+          error.message ??
+          'Something went wrong';
+      throw ApiException(message.toString(), statusCode: statusCode);
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      throw ApiException('Unable to process your request');
+    }
+  }
+
+  /// Resend OTP function
+  Future<ResendOtpResponse> resendOtp(ResendOtpRequest request) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.resendOtp,
+        data: request.toJson(),
+      );
+
+      return ResendOtpResponse.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (error) {
+      final statusCode = error.response?.statusCode;
+      final data = error.response?.data;
+      final message = (data is Map<String, dynamic> ? data['message'] : null) ??
+          error.message ??
+          'Something went wrong';
+      throw ApiException(message.toString(), statusCode: statusCode);
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      throw ApiException('Unable to process your request');
+    }
+  }
+
+  /// Forgot Password function
+  Future<ForgotPasswordResponse> forgotPassword(ForgotPasswordRequest request) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.forgotPassword,
+        data: request.toJson(),
+      );
+
+      return ForgotPasswordResponse.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (error) {
+      final statusCode = error.response?.statusCode;
+      final data = error.response?.data;
+      final message = (data is Map<String, dynamic> ? data['message'] : null) ??
+          error.message ??
+          'Something went wrong';
+      throw ApiException(message.toString(), statusCode: statusCode);
+    } catch (e) {
+      if (e is ApiException) rethrow;
       throw ApiException('Unable to process your request');
     }
   }
