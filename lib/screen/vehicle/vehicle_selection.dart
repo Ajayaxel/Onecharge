@@ -135,10 +135,58 @@ class _VehicleSelectionState extends State<VehicleSelection> {
                     ),
                   ),
 
+                  const SizedBox(height: 12),
+
+                  // Helper text - Centered
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 24.0),
+                      child: Text(
+                        "Please select your vehicle type from the dropdown below",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w400,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ),
+
                   const SizedBox(height: 30),
 
                   // Custom Dropdown
                   _buildVehicleDropdown(),
+
+                  // Show vehicle icon when no vehicle is selected
+                  if (_selectedVehicle == null) ...[
+                    const SizedBox(height: 40),
+                    Expanded(
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.directions_car_outlined,
+                              size: 120,
+                              color: Colors.grey.shade300,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              "Choose a vehicle type to get started",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey.shade500,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
 
                   // Show vehicle brand logos when a vehicle is selected and no brand is selected
                   if (_selectedVehicle != null && _selectedBrand == null) ...[
@@ -176,6 +224,29 @@ class _VehicleSelectionState extends State<VehicleSelection> {
         setState(() {
           _isDropdownOpen = false;
         });
+      }
+    }
+
+    // Auto-select "car" as default when categories are loaded and nothing is selected
+    if (state is VehicleCategoryLoaded && _selectedVehicle == null) {
+      final carCategory = state.categories.firstWhere(
+        (category) => category.name.toLowerCase() == 'car',
+        orElse: () => const VehicleCategory(id: 0, name: ''),
+      );
+      if (carCategory.id > 0) {
+        setState(() {
+          _selectedVehicle = carCategory.name;
+          _selectedCategoryId = carCategory.id;
+          _selectedBrand = null;
+          _selectedSubModel = null;
+        });
+        // Fetch brands for the selected car category
+        _brandBloc.add(
+          BrandsFetched(
+            categoryId: carCategory.id,
+            categoryName: carCategory.name,
+          ),
+        );
       }
     }
 
@@ -789,11 +860,13 @@ class _VehicleSelectionState extends State<VehicleSelection> {
       width: double.infinity,
       height: 50,
       child: ElevatedButton(
-        onPressed: _selectedSubModel != null
-            ? () {
-                _showVehicleNumberBottomSheet();
-              }
-            : null,
+        onPressed: () {
+          if (_selectedSubModel == null) {
+            _showSubModelNotSelectedDialog();
+          } else {
+            _showVehicleNumberBottomSheet();
+          }
+        },
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.black,
           foregroundColor: Colors.white,
@@ -805,6 +878,49 @@ class _VehicleSelectionState extends State<VehicleSelection> {
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
         ),
       ),
+    );
+  }
+
+  void _showSubModelNotSelectedDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          title: const Text(
+            "Select Sub-Model",
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textColor,
+            ),
+          ),
+          content: const Text(
+            "Please select a sub-model first before adding the vehicle.",
+            style: TextStyle(
+              fontSize: 16,
+              color: AppColors.textColor,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text(
+                "OK",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 

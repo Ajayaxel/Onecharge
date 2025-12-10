@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:video_player/video_player.dart';
 import 'package:onecharge/const/onebtn.dart';
 import 'package:onecharge/core/storage/token_storage.dart';
@@ -705,167 +707,108 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
   }
 
   Future<void> _handleUploadTap() async {
-    print('📸 [IssueReportScreen] _handleUploadTap - Opening file picker options');
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_library),
-              title: const Text('Choose Photos from Gallery'),
-              onTap: () async {
-                print('📸 [IssueReportScreen] User selected: Choose Photos from Gallery');
+    // Show native iOS-style action sheet
+    if (Platform.isIOS) {
+      showCupertinoModalPopup<void>(
+        context: context,
+        builder: (BuildContext context) => CupertinoActionSheet(
+          title: const Text('Choose Media'),
+          actions: <CupertinoActionSheetAction>[
+            CupertinoActionSheetAction(
+              onPressed: () {
                 Navigator.pop(context);
-                await _pickMultipleImages(ImageSource.gallery);
+                _pickMultipleImages(ImageSource.gallery);
               },
+              child: const Text('Choose Photos from Library'),
             ),
-            ListTile(
-              leading: const Icon(Icons.video_library),
-              title: const Text('Choose Videos from Gallery'),
-              onTap: () async {
-                print('📸 [IssueReportScreen] User selected: Choose Videos from Gallery');
+            CupertinoActionSheetAction(
+              onPressed: () {
                 Navigator.pop(context);
-                await _pickMultipleVideos(ImageSource.gallery);
+                _pickMultipleVideos(ImageSource.gallery);
               },
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_camera),
-              title: const Text('Take Photo'),
-              onTap: () async {
-                print('📸 [IssueReportScreen] User selected: Take Photo');
-                Navigator.pop(context);
-                await _pickImage(ImageSource.camera);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.videocam),
-              title: const Text('Record Video'),
-              onTap: () async {
-                print('📸 [IssueReportScreen] User selected: Record Video');
-                Navigator.pop(context);
-                await _pickVideo(ImageSource.camera);
-              },
+              child: const Text('Choose Videos from Library'),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _pickImage(ImageSource source) async {
-    print('🖼️ [IssueReportScreen] _pickImage - Source: $source');
-    try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: source,
-        imageQuality: 85,
-      );
-      if (image != null) {
-        print('✅ [IssueReportScreen] Image selected: ${image.path}');
-        setState(() {
-          selectedMediaPaths.add(image.path);
-        });
-        print('✅ [IssueReportScreen] Total media: ${selectedMediaPaths.length}');
-      } else {
-        print('⚠️ [IssueReportScreen] No image selected');
-      }
-    } catch (e) {
-      print('❌ [IssueReportScreen] Error picking image: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error picking image: ${e.toString()}'),
+          cancelButton: CupertinoActionSheetAction(
+            isDefaultAction: true,
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: const Text('Cancel'),
           ),
-        );
-      }
+        ),
+      );
+    } else {
+      // For Android, use Material bottom sheet
+      showModalBottomSheet(
+        context: context,
+        builder: (context) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Choose Photos from Gallery'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _pickMultipleImages(ImageSource.gallery);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.video_library),
+                title: const Text('Choose Videos from Gallery'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _pickMultipleVideos(ImageSource.gallery);
+                },
+              ),
+            ],
+          ),
+        ),
+      );
     }
   }
 
   Future<void> _pickMultipleImages(ImageSource source) async {
-    print('🖼️ [IssueReportScreen] _pickMultipleImages - Source: $source');
+    final permissionGranted = await _ensurePhotosPermission();
+    if (!permissionGranted) {
+      return;
+    }
+    
     try {
       final List<XFile> images = await _imagePicker.pickMultiImage(
         imageQuality: 85,
       );
+      
       if (images.isNotEmpty) {
-        print('✅ [IssueReportScreen] ${images.length} images selected');
         setState(() {
           selectedMediaPaths.addAll(images.map((img) => img.path));
         });
-        print('✅ [IssueReportScreen] Total media: ${selectedMediaPaths.length}');
-      } else {
-        print('⚠️ [IssueReportScreen] No images selected');
       }
     } catch (e) {
       print('❌ [IssueReportScreen] Error picking images: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error picking images: ${e.toString()}'),
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _pickVideo(ImageSource source) async {
-    print('🎥 [IssueReportScreen] _pickVideo - Source: $source');
-    try {
-      final XFile? video = await _imagePicker.pickVideo(
-        source: source,
-        maxDuration: const Duration(minutes: 5),
-      );
-      if (video != null) {
-        print('✅ [IssueReportScreen] Video selected: ${video.path}');
-        setState(() {
-          selectedMediaPaths.add(video.path);
-        });
-        _initializeVideoPlayer(video.path);
-        print('✅ [IssueReportScreen] Total media: ${selectedMediaPaths.length}');
-      } else {
-        print('⚠️ [IssueReportScreen] No video selected');
-      }
-    } catch (e) {
-      print('❌ [IssueReportScreen] Error picking video: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error picking video: ${e.toString()}'),
-          ),
-        );
-      }
     }
   }
 
   Future<void> _pickMultipleVideos(ImageSource source) async {
-    print('🎥 [IssueReportScreen] _pickMultipleVideos - Source: $source');
+    final permissionGranted = await _ensurePhotosPermission();
+    if (!permissionGranted) {
+      return;
+    }
+    
     try {
-      // Note: image_picker doesn't support picking multiple videos directly
-      // We'll pick one at a time, but allow multiple selections
       final XFile? video = await _imagePicker.pickVideo(
         source: source,
         maxDuration: const Duration(minutes: 5),
       );
       if (video != null) {
-        print('✅ [IssueReportScreen] Video selected: ${video.path}');
         setState(() {
           selectedMediaPaths.add(video.path);
         });
         _initializeVideoPlayer(video.path);
-        print('✅ [IssueReportScreen] Total media: ${selectedMediaPaths.length}');
-      } else {
-        print('⚠️ [IssueReportScreen] No video selected');
       }
     } catch (e) {
       print('❌ [IssueReportScreen] Error picking video: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error picking video: ${e.toString()}'),
-          ),
-        );
-      }
     }
   }
 
@@ -883,6 +826,26 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
     } catch (e) {
       print('❌ [IssueReportScreen] Error initializing video player: $e');
     }
+  }
+
+  Future<bool> _ensurePhotosPermission() async {
+    PermissionStatus permission = await Permission.photos.status;
+    if (permission.isDenied) {
+      permission = await Permission.photos.request();
+    }
+
+    if (permission.isPermanentlyDenied || permission.isDenied) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Photos permission is required to select images.'),
+          ),
+        );
+      }
+      return false;
+    }
+
+    return true;
   }
 
   Future<void> _selectLocation() async {

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:onecharge/const/onebtn.dart';
 import 'package:onecharge/core/storage/token_storage.dart';
 import 'package:onecharge/features/issue_report/presentation/bloc/issue_report_bloc.dart';
@@ -184,6 +185,68 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     }
   }
 
+  Future<bool> _requestPhotoPermission() async {
+    if (Platform.isIOS) {
+      final status = await Permission.photos.status;
+      if (status.isDenied) {
+        final result = await Permission.photos.request();
+        if (result.isDenied) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Photo library permission is required to select photos.'),
+              ),
+            );
+          }
+          return false;
+        }
+      }
+      if (status.isPermanentlyDenied) {
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Permission Required'),
+              content: const Text(
+                'Photo library permission is required. Please enable it in Settings.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    openAppSettings();
+                  },
+                  child: const Text('Open Settings'),
+                ),
+              ],
+            ),
+          );
+        }
+        return false;
+      }
+    } else if (Platform.isAndroid) {
+      final status = await Permission.photos.status;
+      if (status.isDenied) {
+        final result = await Permission.photos.request();
+        if (result.isDenied) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Photo library permission is required to select photos.'),
+              ),
+            );
+          }
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
   Future<void> _pickFiles() async {
     showModalBottomSheet(
       context: context,
@@ -207,49 +270,19 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                 await _pickMultipleVideos();
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.photo_camera),
-              title: const Text('Take Photo'),
-              onTap: () async {
-                Navigator.pop(context);
-                await _pickImage(ImageSource.camera);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.videocam),
-              title: const Text('Record Video'),
-              onTap: () async {
-                Navigator.pop(context);
-                await _pickVideo(ImageSource.camera);
-              },
-            ),
           ],
         ),
       ),
     );
   }
 
-  Future<void> _pickImage(ImageSource source) async {
-    try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: source,
-        imageQuality: 85,
-      );
-      if (image != null && mounted) {
-        setState(() {
-          _selectedFiles.add(image.path);
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error picking image: ${e.toString()}')),
-        );
-      }
-    }
-  }
-
   Future<void> _pickMultipleImages() async {
+    // Request photo permission first
+    final hasPermission = await _requestPhotoPermission();
+    if (!hasPermission) {
+      return;
+    }
+    
     try {
       final List<XFile> images = await _imagePicker.pickMultiImage(
         imageQuality: 85,
@@ -268,27 +301,13 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     }
   }
 
-  Future<void> _pickVideo(ImageSource source) async {
-    try {
-      final XFile? video = await _imagePicker.pickVideo(
-        source: source,
-        maxDuration: const Duration(minutes: 5),
-      );
-      if (video != null && mounted) {
-        setState(() {
-          _selectedFiles.add(video.path);
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error picking video: ${e.toString()}')),
-        );
-      }
-    }
-  }
-
   Future<void> _pickMultipleVideos() async {
+    // Request photo permission first
+    final hasPermission = await _requestPhotoPermission();
+    if (!hasPermission) {
+      return;
+    }
+    
     try {
       final XFile? video = await _imagePicker.pickVideo(
         source: ImageSource.gallery,

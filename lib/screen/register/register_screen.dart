@@ -50,7 +50,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _handleRegister(BuildContext context) async {
     if (!_isTermsAccepted) {
-      _showSnackBar('Please accept the Terms & Conditions and Privacy Policy');
+      _showPrivacyPolicyDialog(context);
       return;
     }
 
@@ -120,6 +120,46 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  void _showPrivacyPolicyDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'Privacy Policy Required',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          content: const Text(
+            'Please accept the Terms & Conditions and Privacy Policy to continue with registration.',
+            style: TextStyle(
+              fontSize: 14,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text(
+                'OK',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -161,6 +201,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 /// Form
                 Form(
                   key: _formKey,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -169,6 +210,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         controller: _nameController,
                         keyboardType: TextInputType.name,
                         textInputAction: TextInputAction.next,
+                        onChanged: (_) {
+                          if (_formKey.currentState?.validate() ?? false) {
+                            setState(() {});
+                          } else {
+                            setState(() {});
+                          }
+                        },
                         decoration: InputDecoration(
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -220,6 +268,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
                         textInputAction: TextInputAction.next,
+                        onChanged: (_) {
+                          setState(() {});
+                        },
                         decoration: InputDecoration(
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -270,6 +321,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         controller: _phoneNumberController,
                         keyboardType: TextInputType.phone,
                         textInputAction: TextInputAction.next,
+                        onChanged: (_) {
+                          setState(() {});
+                        },
                         decoration: InputDecoration(
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -376,6 +430,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         controller: _passwordController,
                         obscureText: !_isPasswordVisible,
                         textInputAction: TextInputAction.next,
+                        onChanged: (_) {
+                          setState(() {});
+                        },
                         decoration: InputDecoration(
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -441,6 +498,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         controller: _confirmPasswordController,
                         obscureText: !_isConfirmPasswordVisible,
                         textInputAction: TextInputAction.done,
+                        onChanged: (_) {
+                          setState(() {});
+                        },
                         decoration: InputDecoration(
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -573,7 +633,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 OneBtn(
                   text: "Register",
                   isLoading: _isLoading,
-                  onPressed: (_isLoading || !_isTermsAccepted)
+                  onPressed: _isLoading
                       ? null
                       : () => _handleRegister(context),
                 ),

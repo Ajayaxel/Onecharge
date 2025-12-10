@@ -46,10 +46,16 @@ class _PhoneLoginState extends State<PhoneLogin> {
     }
   }
 
-  void _showSnackBar(String message) {
+  void _showSnackBar(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: isError ? Colors.red : Colors.green,
+          duration: const Duration(seconds: 3),
+        ),
+      );
   }
 
   @override
@@ -221,9 +227,9 @@ class _PhoneLoginState extends State<PhoneLogin> {
                     if (!mounted) return;
                     if (state.status == LoginStatus.failure &&
                         state.message != null) {
-                      _showSnackBar(state.message!);
+                      _showSnackBar(state.message!, isError: true);
                     } else if (state.status == LoginStatus.success) {
-                      _showSnackBar(state.message ?? 'Login successful');
+                      _showSnackBar(state.message ?? 'Login successful', isError: false);
                       Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(
