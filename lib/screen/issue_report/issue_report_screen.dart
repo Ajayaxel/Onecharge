@@ -7,7 +7,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 import 'package:lottie/lottie.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:onecharge/const/onebtn.dart';
 import 'package:onecharge/core/storage/token_storage.dart';
 import 'package:onecharge/core/storage/vehicle_storage.dart';
@@ -18,6 +17,7 @@ import 'package:onecharge/resources/app_resources.dart';
 import 'package:onecharge/screen/issue_report/success_screen.dart';
 import 'package:onecharge/screen/issue_report/location_selection_screen.dart';
 import 'package:onecharge/screen/login/phone_login.dart';
+import 'package:onecharge/screen/payment/payment_webview_screen.dart';
 
 class IssueReportScreen extends StatefulWidget {
   const IssueReportScreen({super.key});
@@ -1742,31 +1742,12 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
   }
 
   Future<void> _launchPaymentUrl(String url) async {
-    try {
-      final Uri uri = Uri.parse(url);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.inAppWebView);
-        print('✅ [IssueReportScreen] Payment URL launched successfully');
-      } else {
-        print('❌ [IssueReportScreen] Could not launch payment URL');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Could not open payment page. Please try again.'),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print('❌ [IssueReportScreen] Error launching payment URL: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error opening payment page: ${e.toString()}'),
-          ),
-        );
-      }
-    }
+    print('💳 [IssueReportScreen] Navigating to custom PaymentWebViewScreen');
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => PaymentWebViewScreen(paymentUrl: url),
+      ),
+    );
   }
 }
 
