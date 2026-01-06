@@ -15,6 +15,12 @@ class IssueReportState extends Equatable {
     this.currentFileName,
     this.elapsedSeconds,
     this.errors,
+    this.paymentRequired,
+    this.paymentUrl,
+    this.isValidatingCoupon = false,
+    this.couponValidated = false,
+    this.couponValidationError,
+    this.couponValidationData,
   });
 
   final IssueReportStatus status;
@@ -28,6 +34,12 @@ class IssueReportState extends Equatable {
   final String? currentFileName; // Name of the current file being uploaded
   final int? elapsedSeconds; // Elapsed time in seconds since upload started
   final Map<String, List<String>>? errors; // Validation errors from API
+  final bool? paymentRequired;
+  final String? paymentUrl;
+  final bool isValidatingCoupon;
+  final bool couponValidated;
+  final String? couponValidationError;
+  final RedeemCodeValidationData? couponValidationData;
 
   IssueReportState copyWith({
     IssueReportStatus? status,
@@ -41,6 +53,12 @@ class IssueReportState extends Equatable {
     String? currentFileName,
     int? elapsedSeconds,
     Map<String, List<String>>? errors,
+    bool? paymentRequired,
+    String? paymentUrl,
+    bool? isValidatingCoupon,
+    bool? couponValidated,
+    String? couponValidationError,
+    RedeemCodeValidationData? couponValidationData,
     bool clearMessage = false,
     bool clearUploadProgress = false,
     bool clearCurrentFileProgress = false,
@@ -58,6 +76,12 @@ class IssueReportState extends Equatable {
       currentFileName: currentFileName ?? this.currentFileName,
       elapsedSeconds: elapsedSeconds ?? this.elapsedSeconds,
       errors: clearErrors ? null : (errors ?? this.errors),
+      paymentRequired: paymentRequired ?? this.paymentRequired,
+      paymentUrl: paymentUrl ?? this.paymentUrl,
+      isValidatingCoupon: isValidatingCoupon ?? this.isValidatingCoupon,
+      couponValidated: couponValidated ?? this.couponValidated,
+      couponValidationError: couponValidationError ?? this.couponValidationError,
+      couponValidationData: couponValidationData ?? this.couponValidationData,
     );
   }
 
@@ -79,6 +103,12 @@ class IssueReportState extends Equatable {
         currentFileName,
         elapsedSeconds,
         errors,
+        paymentRequired,
+        paymentUrl,
+        isValidatingCoupon,
+        couponValidated,
+        couponValidationError,
+        couponValidationData,
       ];
 }
 

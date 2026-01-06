@@ -5,8 +5,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:video_player/video_player.dart';
+import 'package:lottie/lottie.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:onecharge/const/onebtn.dart';
 import 'package:onecharge/core/storage/token_storage.dart';
 import 'package:onecharge/core/storage/vehicle_storage.dart';
@@ -32,19 +33,25 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
   List<String> selectedMediaPaths = [];
   final ImagePicker _imagePicker = ImagePicker();
   final Map<String, VideoPlayerController> _videoControllers = {};
-  
+
   // API fetched categories
   List<IssueCategory> _issueCategories = [];
   bool _isLoadingCategories = true;
   String? _categoryError;
-  
+
   // Selected location
   double? _selectedLatitude;
   double? _selectedLongitude;
   String? _selectedLocationAddress;
-  
+
   // Number plate
   String? _numberPlate;
+
+  // Coupon code
+  final TextEditingController _couponController = TextEditingController();
+  bool _couponApplied = false;
+  bool _hasShownCouponAnimation =
+      false; // Track if we've already shown the animation
 
   @override
   void initState() {
@@ -53,27 +60,31 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
     _fetchIssueCategories();
     _loadNumberPlate();
   }
-  
+
   Future<void> _loadNumberPlate() async {
     final plate = await VehicleStorage.getVehicleNumber();
     setState(() {
       _numberPlate = plate;
     });
   }
-  
+
   Future<void> _fetchIssueCategories() async {
-    print('🟢 [IssueReportScreen] _fetchIssueCategories - Starting to fetch categories');
+    print(
+      '🟢 [IssueReportScreen] _fetchIssueCategories - Starting to fetch categories',
+    );
     setState(() {
       _isLoadingCategories = true;
       _categoryError = null;
     });
-    
+
     try {
       final repository = IssueReportRepository();
       final categories = await repository.fetchIssueCategories();
-      
-      print('✅ [IssueReportScreen] Categories fetched successfully: ${categories.length}');
-      
+
+      print(
+        '✅ [IssueReportScreen] Categories fetched successfully: ${categories.length}',
+      );
+
       if (mounted) {
         setState(() {
           _issueCategories = categories;
@@ -90,7 +101,7 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
       }
     }
   }
-  
+
   // Map category name to icon
   IconData _getIconForCategory(String categoryName) {
     final name = categoryName.toLowerCase();
@@ -109,13 +120,13 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
     }
     return Icons.help_outline; // Default icon
   }
-  
+
   // Convert API categories to UI format
   List<Map<String, dynamic>> get _displayCategories {
     if (_isLoadingCategories || _issueCategories.isEmpty) {
       return [];
     }
-    
+
     return _issueCategories.map((category) {
       return {
         'title': category.name,
@@ -134,9 +145,9 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
     }
     _videoControllers.clear();
     otherIssueController.dispose();
+    _couponController.dispose();
     super.dispose();
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -148,7 +159,10 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
           backgroundColor: Colors.white,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.textColor),
+            icon: const Icon(
+              Icons.arrow_back_ios_new,
+              color: AppColors.textColor,
+            ),
             onPressed: () => Navigator.of(context).pop(),
           ),
           title: const Text(
@@ -163,38 +177,106 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
         ),
         body: BlocListener<IssueReportBloc, IssueReportState>(
           listener: (context, state) {
-            print('🟡 [IssueReportScreen] BlocListener - State changed: ${state.status}');
+            print(
+              '🟡 [IssueReportScreen] BlocListener - State changed: ${state.status}',
+            );
+
+            // Handle coupon validation - only show animation when coupon is validated, not during ticket submission
+            // Only check coupon validation state if we're not in a ticket submission state
+            if (state.status != IssueReportStatus.loading &&
+                state.status != IssueReportStatus.uploading &&
+                state.status != IssueReportStatus.success) {
+              if (state.isValidatingCoupon) {
+                // Show loading indicator if needed
+                _hasShownCouponAnimation =
+                    false; // Reset flag when starting new validation
+              } else if (state.couponValidated &&
+                  state.couponValidationData != null &&
+                  !_hasShownCouponAnimation) {
+                // Coupon validated successfully - show animation only once
+                print('✅ [IssueReportScreen] Coupon validated successfully');
+                setState(() {
+                  _couponApplied = true;
+                  _hasShownCouponAnimation =
+                      true; // Mark that we've shown the animation
+                });
+                _showCouponSuccessAnimation();
+              } else if (state.couponValidationError != null &&
+                  !state.isValidatingCoupon &&
+                  !_hasShownCouponAnimation) {
+                // Coupon validation failed - only show error if we haven't shown animation yet
+                print(
+                  '❌ [IssueReportScreen] Coupon validation failed: ${state.couponValidationError}',
+                );
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(state.couponValidationError!),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                _hasShownCouponAnimation =
+                    true; // Mark to prevent showing again
+              }
+            }
+
             if (state.isSuccess) {
-              print('✅ [IssueReportScreen] Success! Navigating to success screen');
+              print(
+                '✅ [IssueReportScreen] Success! Navigating to success screen',
+              );
               print('✅ [IssueReportScreen] Message: ${state.message}');
+              print(
+                '✅ [IssueReportScreen] Payment required: ${state.paymentRequired}',
+              );
+              print('✅ [IssueReportScreen] Payment URL: ${state.paymentUrl}');
               print('✅ [IssueReportScreen] Ticket ID: ${state.ticket?.id}');
               if (state.ticket != null && state.ticket!.ticketId.isNotEmpty) {
-                print('✅ [IssueReportScreen] Ticket ID (ticket_id): ${state.ticket!.ticketId}');
+                print(
+                  '✅ [IssueReportScreen] Ticket ID (ticket_id): ${state.ticket!.ticketId}',
+                );
               }
-              // Clear form fields after successful submission
-              _clearFormFields();
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                  builder: (context) => SuccessScreen(
-                    isSuccess: true,
-                    message: state.message ?? 'Service ticket created successfully',
-                    ticket: state.ticket,
+
+              // Check if payment is required
+              if (state.paymentRequired == true &&
+                  state.paymentUrl != null &&
+                  state.paymentUrl!.isNotEmpty) {
+                print(
+                  '💳 [IssueReportScreen] Payment required, navigating to payment URL',
+                );
+                _launchPaymentUrl(state.paymentUrl!);
+              } else {
+                // Clear form fields after successful submission
+                _clearFormFields();
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (context) => SuccessScreen(
+                      isSuccess: true,
+                      message:
+                          state.message ??
+                          'Service ticket created successfully',
+                      ticket: state.ticket,
+                    ),
                   ),
-                ),
-              );
+                );
+              }
             } else if (state.isFailure) {
-              print('❌ [IssueReportScreen] Failure! Error message: ${state.message}');
+              print(
+                '❌ [IssueReportScreen] Failure! Error message: ${state.message}',
+              );
               print('❌ [IssueReportScreen] Status code: ${state.statusCode}');
-              
+
               // Check if user is unauthenticated (401)
               if (state.statusCode == 401) {
-                print('🔐 [IssueReportScreen] User unauthenticated - Clearing token and navigating to login');
+                print(
+                  '🔐 [IssueReportScreen] User unauthenticated - Clearing token and navigating to login',
+                );
                 // Clear token and navigate to login screen
                 TokenStorage.clearToken().then((_) {
                   if (context.mounted) {
                     Navigator.pushAndRemoveUntil(
                       context,
-                      MaterialPageRoute(builder: (context) => const PhoneLogin()),
+                      MaterialPageRoute(
+                        builder: (context) => const PhoneLogin(),
+                      ),
                       (route) => false,
                     );
                   }
@@ -218,427 +300,529 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
               return SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
                 child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Issue Categories
-            if (_isLoadingCategories)
-              const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Center(
-                  child: CircularProgressIndicator(),
-                ),
-              )
-            else if (_categoryError != null)
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Failed to load categories',
-                      style: TextStyle(color: Colors.red),
-                    ),
-                    const SizedBox(height: 8),
-                    ElevatedButton(
-                      onPressed: _fetchIssueCategories,
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ),
-              )
-            else if (_displayCategories.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Center(
-                  child: Text('No categories available'),
-                ),
-              )
-            else
-              ..._displayCategories.map(
-                (category) => _buildIssueCategory(
-                  title: category['title'] as String,
-                  icon: category['icon'] as IconData,
-                ),
-              ),
-
-            if (selectedIssue == _otherCategoryTitle) ...[
-              const SizedBox(height: 8),
-              const Text(
-                'Describe your issue',
-                style: TextStyle(
-                  color: AppColors.textColor,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: TextField(
-                  controller: otherIssueController,
-                  decoration: InputDecoration(
-                    hintText: 'Type your issue',
-                    hintStyle: TextStyle(
-                      color: Colors.grey.shade400,
-                      fontSize: 14,
-                    ),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                  ),
-                  maxLines: 3,
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
-
-            // Number Plate Section
-            const SizedBox(height: 24),
-            const Text(
-              'Vehicle Number Plate',
-              style: TextStyle(
-                color: AppColors.textColor,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 12),
-            GestureDetector(
-              onTap: _showNumberPlateBottomSheet,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _numberPlate != null && _numberPlate!.isNotEmpty
-                        ? Colors.black
-                        : Colors.grey.shade300,
-                    width: 2,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
+                    // Issue Categories
+                    if (_isLoadingCategories)
+                      const Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (_categoryError != null)
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          children: [
+                            Text(
+                              'Failed to load categories',
+                              style: TextStyle(color: Colors.red),
+                            ),
+                            const SizedBox(height: 8),
+                            ElevatedButton(
+                              onPressed: _fetchIssueCategories,
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (_displayCategories.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Center(child: Text('No categories available')),
+                      )
+                    else
+                      ..._displayCategories.map(
+                        (category) => _buildIssueCategory(
+                          title: category['title'] as String,
+                          icon: category['icon'] as IconData,
+                        ),
                       ),
-                      child: Icon(
-                        Icons.confirmation_number,
-                        color: Colors.black,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        _numberPlate ?? 'Tap to enter number plate',
+
+                    if (selectedIssue == _otherCategoryTitle) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Describe your issue',
                         style: TextStyle(
-                          color: _numberPlate != null && _numberPlate!.isNotEmpty
-                              ? AppColors.textColor
-                              : Colors.grey.shade600,
-                          fontSize: 14,
-                          fontWeight: _numberPlate != null && _numberPlate!.isNotEmpty
-                              ? FontWeight.w500
-                              : FontWeight.normal,
+                          color: AppColors.textColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: TextField(
+                          controller: otherIssueController,
+                          decoration: InputDecoration(
+                            hintText: 'Type your issue',
+                            hintStyle: TextStyle(
+                              color: Colors.grey.shade400,
+                              fontSize: 14,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                          ),
+                          maxLines: 3,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+
+                    // Number Plate Section
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Vehicle Number Plate',
+                      style: TextStyle(
+                        color: AppColors.textColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    GestureDetector(
+                      onTap: _showNumberPlateBottomSheet,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color:
+                                _numberPlate != null && _numberPlate!.isNotEmpty
+                                ? Colors.black
+                                : Colors.grey.shade300,
+                            width: 2,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.confirmation_number,
+                                color: Colors.black,
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                _numberPlate ?? 'Tap to enter number plate',
+                                style: TextStyle(
+                                  color:
+                                      _numberPlate != null &&
+                                          _numberPlate!.isNotEmpty
+                                      ? AppColors.textColor
+                                      : Colors.grey.shade600,
+                                  fontSize: 14,
+                                  fontWeight:
+                                      _numberPlate != null &&
+                                          _numberPlate!.isNotEmpty
+                                      ? FontWeight.w500
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                            ),
+                            Icon(
+                              Icons.arrow_forward_ios,
+                              color: Colors.grey.shade400,
+                              size: 16,
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      color: Colors.grey.shade400,
-                      size: 16,
-                    ),
-                  ],
-                ),
-              ),
-            ),
 
-            // Location Section
-            const SizedBox(height: 24),
-            const Text(
-              'Select Location',
-              style: TextStyle(
-                color: AppColors.textColor,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 12),
-            GestureDetector(
-              onTap: _selectLocation,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _selectedLocationAddress != null
-                        ? Colors.black
-                        : Colors.grey.shade300,
-                    width: 2,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.location_on,
-                        color: Colors.black,
-                        size: 24,
+                    // Location Section
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Select Location',
+                      style: TextStyle(
+                        color: AppColors.textColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _selectedLocationAddress ?? 'Tap to select location',
-                            style: TextStyle(
-                              color: _selectedLocationAddress != null
-                                  ? AppColors.textColor
-                                  : Colors.grey.shade600,
-                              fontSize: 14,
-                              fontWeight: _selectedLocationAddress != null
-                                  ? FontWeight.w500
-                                  : FontWeight.normal,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                    const SizedBox(height: 12),
+                    GestureDetector(
+                      onTap: _selectLocation,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _selectedLocationAddress != null
+                                ? Colors.black
+                                : Colors.grey.shade300,
+                            width: 2,
                           ),
-                          if (_selectedLatitude != null && _selectedLongitude != null) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              '${_selectedLatitude!.toStringAsFixed(6)}, ${_selectedLongitude!.toStringAsFixed(6)}',
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 12,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.location_on,
+                                color: Colors.black,
+                                size: 24,
                               ),
                             ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _selectedLocationAddress ??
+                                        'Tap to select location',
+                                    style: TextStyle(
+                                      color: _selectedLocationAddress != null
+                                          ? AppColors.textColor
+                                          : Colors.grey.shade600,
+                                      fontSize: 14,
+                                      fontWeight:
+                                          _selectedLocationAddress != null
+                                          ? FontWeight.w500
+                                          : FontWeight.normal,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (_selectedLatitude != null &&
+                                      _selectedLongitude != null) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${_selectedLatitude!.toStringAsFixed(6)}, ${_selectedLongitude!.toStringAsFixed(6)}',
+                                      style: TextStyle(
+                                        color: Colors.grey.shade600,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              Icons.arrow_forward_ios,
+                              color: Colors.grey.shade400,
+                              size: 16,
+                            ),
                           ],
-                        ],
+                        ),
                       ),
                     ),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      color: Colors.grey.shade400,
-                      size: 16,
+
+                    // Upload Section
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Upload your issue',
+                      style: TextStyle(
+                        color: AppColors.textColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ],
-                ),
-              ),
-            ),
+                    const SizedBox(height: 12),
 
-            // Upload Section
-            const SizedBox(height: 24),
-            const Text(
-              'Upload your issue',
-              style: TextStyle(
-                color: AppColors.textColor,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 12),
-            
-            // Show preview if media is selected, otherwise show upload button
-            if (selectedMediaPaths.isEmpty)
-              _buildUploadButton()
-            else
-              _buildMediaGrid(),
+                    // Show preview if media is selected, otherwise show upload button
+                    if (selectedMediaPaths.isEmpty)
+                      _buildUploadButton()
+                    else
+                      _buildMediaGrid(),
 
-            const SizedBox(height: 32),
+                    const SizedBox(height: 32),
 
-            // Upload Progress Indicator
-            if (state.isUploading && state.uploadProgress != null) ...[
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue.shade200),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                    // Upload Progress Indicator
+                    if (state.isUploading && state.uploadProgress != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.blue.shade200),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.blue,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    'Uploading files...',
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.blue,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  '${state.currentUploadingFile ?? 0}/${state.totalFiles ?? 0}',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.blue.shade700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                if (state.currentFileName != null)
+                                  Expanded(
+                                    child: Text(
+                                      'Current: ${state.currentFileName}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                if (state.elapsedSeconds != null) ...[
+                                  if (state.currentFileName != null)
+                                    const SizedBox(width: 8),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.access_time,
+                                        size: 14,
+                                        color: Colors.blue.shade700,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _formatDuration(state.elapsedSeconds!),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.blue.shade700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            // Overall progress
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Overall Progress',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                    ),
+                                    Text(
+                                      '${((state.uploadProgress ?? 0) * 100).toStringAsFixed(1)}%',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blue.shade700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                LinearProgressIndicator(
+                                  value: state.uploadProgress,
+                                  backgroundColor: Colors.grey.shade300,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    AppColors.primaryColor,
+                                  ),
+                                  minHeight: 8,
+                                ),
+                              ],
+                            ),
+                            // Current file progress (if available)
+                            if (state.currentFileProgress != null &&
+                                state.currentFileProgress! > 0 &&
+                                state.currentFileProgress! < 1) ...[
+                              const SizedBox(height: 12),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'Current File',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.grey.shade700,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${(state.currentFileProgress! * 100).toStringAsFixed(1)}%',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.blue.shade700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  LinearProgressIndicator(
+                                    value: state.currentFileProgress,
+                                    backgroundColor: Colors.grey.shade300,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.blue,
+                                    ),
+                                    minHeight: 6,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // Coupon Code Section
+                    const Text(
+                      'Coupon Code',
+                      style: TextStyle(
+                        color: AppColors.textColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     Row(
                       children: [
-                        const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                        Expanded(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color:
+                                    (_couponController.text.isNotEmpty &&
+                                        !_couponApplied)
+                                    ? Colors.black
+                                    : Colors.grey.shade300,
+                                width: 2,
+                              ),
+                            ),
+                            child: TextField(
+                              controller: _couponController,
+                              decoration: InputDecoration(
+                                hintText: 'Enter coupon code',
+                                hintStyle: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 14,
+                                ),
+                                border: InputBorder.none,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 16,
+                                ),
+                              ),
+                              style: const TextStyle(
+                                color: AppColors.textColor,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              enabled: !_couponApplied,
+                              onChanged: (value) {
+                                setState(() {
+                                  // Trigger rebuild to update border color
+                                });
+                              },
+                            ),
                           ),
                         ),
                         const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Uploading files...',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.blue,
+                        Opacity(
+                          opacity: _couponApplied ? 0.5 : 1.0,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black,
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                          ),
-                        ),
-                        Text(
-                          '${state.currentUploadingFile ?? 0}/${state.totalFiles ?? 0}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.blue.shade700,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: _couponApplied ? null : _applyCoupon,
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 16,
+                                  ),
+                                  child: Text(
+                                    _couponApplied ? 'Applied' : 'Apply',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        if (state.currentFileName != null)
-                          Expanded(
-                            child: Text(
-                              'Current: ${state.currentFileName}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade700,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        if (state.elapsedSeconds != null) ...[
-                          if (state.currentFileName != null) const SizedBox(width: 8),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.access_time,
-                                size: 14,
-                                color: Colors.blue.shade700,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                _formatDuration(state.elapsedSeconds!),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.blue.shade700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ],
+                    SizedBox(height: 30),
+
+                    // Submit Button
+                    OneBtn(
+                      text: state.isLoading
+                          ? (state.isUploading
+                                ? 'Uploading...'
+                                : 'Submitting...')
+                          : 'Submit Request',
+                      onPressed: state.isLoading ? null : _handleSubmit,
                     ),
-                    const SizedBox(height: 12),
-                    // Overall progress
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Overall Progress',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.grey.shade700,
-                              ),
-                            ),
-                            Text(
-                              '${((state.uploadProgress ?? 0) * 100).toStringAsFixed(1)}%',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue.shade700,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        LinearProgressIndicator(
-                          value: state.uploadProgress,
-                          backgroundColor: Colors.grey.shade300,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            AppColors.primaryColor,
-                          ),
-                          minHeight: 8,
-                        ),
-                      ],
-                    ),
-                    // Current file progress (if available)
-                    if (state.currentFileProgress != null && state.currentFileProgress! > 0 && state.currentFileProgress! < 1) ...[
-                      const SizedBox(height: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Current File',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.grey.shade700,
-                                ),
-                              ),
-                              Text(
-                                '${(state.currentFileProgress! * 100).toStringAsFixed(1)}%',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue.shade700,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          LinearProgressIndicator(
-                            value: state.currentFileProgress,
-                            backgroundColor: Colors.grey.shade300,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.blue,
-                            ),
-                            minHeight: 6,
-                          ),
-                        ],
-                      ),
-                    ],
+
+                    const SizedBox(height: 16),
                   ],
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            // Submit Button
-            OneBtn(
-              text: state.isLoading
-                  ? (state.isUploading ? 'Uploading...' : 'Submitting...')
-                  : 'Submit Request',
-              onPressed: state.isLoading ? null : _handleSubmit,
-            ),
-
-            const SizedBox(height: 16),
-          ],
                 ),
               );
             },
@@ -668,7 +852,6 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
           decoration: BoxDecoration(
             color: isSelected ? Colors.black : Colors.grey.shade50,
             borderRadius: BorderRadius.circular(12),
-            
           ),
           child: Row(
             children: [
@@ -717,14 +900,14 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(context);
-                _pickMultipleImages(ImageSource.gallery);
+                _pickMultipleImages();
               },
               child: const Text('Choose Photos from Library'),
             ),
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(context);
-                _pickMultipleVideos(ImageSource.gallery);
+                _pickMultipleVideos();
               },
               child: const Text('Choose Videos from Library'),
             ),
@@ -751,7 +934,7 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
                 title: const Text('Choose Photos from Gallery'),
                 onTap: () async {
                   Navigator.pop(context);
-                  await _pickMultipleImages(ImageSource.gallery);
+                  await _pickMultipleImages();
                 },
               ),
               ListTile(
@@ -759,7 +942,7 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
                 title: const Text('Choose Videos from Gallery'),
                 onTap: () async {
                   Navigator.pop(context);
-                  await _pickMultipleVideos(ImageSource.gallery);
+                  await _pickMultipleVideos();
                 },
               ),
             ],
@@ -769,39 +952,39 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
     }
   }
 
-  Future<void> _pickMultipleImages(ImageSource source) async {
-    final permissionGranted = await _ensurePhotosPermission();
-    if (!permissionGranted) {
-      return;
-    }
-    
+  Future<void> _pickMultipleImages() async {
     try {
-      final List<XFile> images = await _imagePicker.pickMultiImage(
+      // image_picker handles permissions automatically on iOS
+      final List<XFile>? images = await _imagePicker.pickMultiImage(
         imageQuality: 85,
       );
-      
-      if (images.isNotEmpty) {
+
+      if (images != null && images.isNotEmpty && mounted) {
         setState(() {
           selectedMediaPaths.addAll(images.map((img) => img.path));
         });
       }
     } catch (e) {
       print('❌ [IssueReportScreen] Error picking images: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error picking images: ${e.toString()}'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
-  Future<void> _pickMultipleVideos(ImageSource source) async {
-    final permissionGranted = await _ensurePhotosPermission();
-    if (!permissionGranted) {
-      return;
-    }
-    
+  Future<void> _pickMultipleVideos() async {
     try {
+      // image_picker handles permissions automatically on iOS
       final XFile? video = await _imagePicker.pickVideo(
-        source: source,
+        source: ImageSource.gallery,
         maxDuration: const Duration(minutes: 5),
       );
-      if (video != null) {
+      if (video != null && mounted) {
         setState(() {
           selectedMediaPaths.add(video.path);
         });
@@ -809,6 +992,14 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
       }
     } catch (e) {
       print('❌ [IssueReportScreen] Error picking video: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error picking video: ${e.toString()}'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -820,40 +1011,25 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
     try {
       final controller = VideoPlayerController.file(File(videoPath));
       await controller.initialize();
-      setState(() {
-        _videoControllers[videoPath] = controller;
-      });
+      if (mounted) {
+        setState(() {
+          _videoControllers[videoPath] = controller;
+        });
+      }
     } catch (e) {
       print('❌ [IssueReportScreen] Error initializing video player: $e');
-    }
-  }
-
-  Future<bool> _ensurePhotosPermission() async {
-    PermissionStatus permission = await Permission.photos.status;
-    if (permission.isDenied) {
-      permission = await Permission.photos.request();
-    }
-
-    if (permission.isPermanentlyDenied || permission.isDenied) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Photos permission is required to select images.'),
-          ),
+          const SnackBar(content: Text('Error loading video preview')),
         );
       }
-      return false;
     }
-
-    return true;
   }
 
   Future<void> _selectLocation() async {
     print('📍 [IssueReportScreen] Opening location selection screen');
     final result = await Navigator.of(context).push<Map<String, dynamic>>(
-      MaterialPageRoute(
-        builder: (context) => const LocationSelectionScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const LocationSelectionScreen()),
     );
 
     if (result != null && mounted) {
@@ -862,8 +1038,12 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
         _selectedLongitude = result['longitude'] as double;
         _selectedLocationAddress = result['address'] as String;
       });
-      print('✅ [IssueReportScreen] Location selected: $_selectedLocationAddress');
-      print('✅ [IssueReportScreen] Coordinates: $_selectedLatitude, $_selectedLongitude');
+      print(
+        '✅ [IssueReportScreen] Location selected: $_selectedLocationAddress',
+      );
+      print(
+        '✅ [IssueReportScreen] Coordinates: $_selectedLatitude, $_selectedLongitude',
+      );
     }
   }
 
@@ -881,6 +1061,8 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
       _selectedLongitude = null;
       _selectedLocationAddress = null;
       // Don't clear number plate - keep it for next submission
+      // Reset coupon animation flag for next submission
+      _hasShownCouponAnimation = false;
     });
     print('🧹 [IssueReportScreen] Form fields cleared');
   }
@@ -965,7 +1147,10 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: AppColors.primaryColor, width: 2),
+                    borderSide: BorderSide(
+                      color: AppColors.primaryColor,
+                      width: 2,
+                    ),
                   ),
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -980,10 +1165,7 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
               // Helper text
               Text(
                 'Enter your vehicle registration number',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade600,
-                ),
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
               ),
 
               const SizedBox(height: 24),
@@ -1089,11 +1271,8 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Lorem Ipsum is simply dummy text of the printing and typesetting.',
-              style: TextStyle(
-                color: Colors.grey.shade500,
-                fontSize: 12,
-              ),
+              'Upload photos or videos to help us understand and resolve your issue better.',
+              style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
               textAlign: TextAlign.center,
             ),
           ],
@@ -1167,15 +1346,12 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
 
   Widget _buildMediaItem(String mediaPath, int index) {
     final isVideo = _isVideoFile(mediaPath);
-    
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.grey.shade300,
-          width: 1,
-        ),
+        border: Border.all(color: Colors.grey.shade300, width: 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -1207,11 +1383,7 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
                   color: Colors.black.withOpacity(0.7),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.close,
-                  color: Colors.white,
-                  size: 16,
-                ),
+                child: const Icon(Icons.close, color: Colors.white, size: 16),
               ),
             ),
           ),
@@ -1221,10 +1393,7 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
               bottom: 6,
               left: 6,
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 6,
-                  vertical: 3,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
                   color: Colors.black.withOpacity(0.7),
                   borderRadius: BorderRadius.circular(4),
@@ -1273,11 +1442,7 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
         return Container(
           color: Colors.grey.shade200,
           child: const Center(
-            child: Icon(
-              Icons.broken_image,
-              size: 32,
-              color: Colors.grey,
-            ),
+            child: Icon(Icons.broken_image, size: 32, color: Colors.grey),
           ),
         );
       },
@@ -1286,7 +1451,7 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
 
   Widget _buildVideoPreview(String videoPath) {
     final controller = _videoControllers[videoPath];
-    
+
     if (controller == null || !controller.value.isInitialized) {
       // Show placeholder while loading
       return GestureDetector(
@@ -1352,11 +1517,68 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.all(16),
-        child: _VideoPlayerDialog(
-          controller: controller,
-          videoPath: videoPath,
-        ),
+        child: _VideoPlayerDialog(controller: controller, videoPath: videoPath),
       ),
+    );
+  }
+
+  void _applyCoupon() {
+    final couponCode = _couponController.text.trim();
+    if (couponCode.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a coupon code')),
+      );
+      return;
+    }
+
+    // Validate coupon code via API
+    context.read<IssueReportBloc>().add(
+      ValidateRedeemCode(redeemCode: couponCode),
+    );
+  }
+
+  void _showCouponSuccessAnimation() {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.8),
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: EdgeInsets.zero,
+          child: GestureDetector(
+            onTap: () {
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
+            },
+            child: Container(
+              width: double.infinity,
+              height: double.infinity,
+              color: Colors.transparent,
+              child: Center(
+                child: SizedBox(
+                  width: MediaQuery.of(context).size.width * 0.8,
+                  height: MediaQuery.of(context).size.width * 0.8,
+                  child: Lottie.asset(
+                    'assets/issue/successfully-done.json',
+                    fit: BoxFit.contain,
+                    repeat: false,
+                    onLoaded: (composition) {
+                      // Auto-close dialog after animation completes
+                      Future.delayed(composition.duration, () {
+                        if (mounted && Navigator.of(context).canPop()) {
+                          Navigator.of(context).pop();
+                        }
+                      });
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1364,14 +1586,12 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
     FocusScope.of(context).unfocus();
     print('🚀 [IssueReportScreen] ========== _handleSubmit START ==========');
     print('🚀 [IssueReportScreen] Submit button clicked');
-    
+
     // Validate category selection
     if (selectedIssue == null) {
       print('⚠️ [IssueReportScreen] Validation failed - No category selected');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select an issue category'),
-        ),
+        const SnackBar(content: Text('Please select an issue category')),
       );
       return;
     }
@@ -1382,7 +1602,9 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
       orElse: () => _issueCategories.first,
     );
     final issueCategoryId = selectedCategory.id;
-    print('📋 [IssueReportScreen] Selected category: ${selectedCategory.name} (ID: $issueCategoryId)');
+    print(
+      '📋 [IssueReportScreen] Selected category: ${selectedCategory.name} (ID: $issueCategoryId)',
+    );
 
     // Get vehicle IDs from storage
     final vehicleTypeId = await VehicleStorage.getVehicleTypeId();
@@ -1394,7 +1616,9 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
     print('📋 [IssueReportScreen] Model ID: $modelId');
 
     if (vehicleTypeId == null || brandId == null || modelId == null) {
-      print('⚠️ [IssueReportScreen] Validation failed - Vehicle information incomplete');
+      print(
+        '⚠️ [IssueReportScreen] Validation failed - Vehicle information incomplete',
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please complete your vehicle information first'),
@@ -1407,9 +1631,7 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
     if (_numberPlate == null || _numberPlate!.trim().isEmpty) {
       print('⚠️ [IssueReportScreen] Validation failed - Number plate required');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter your vehicle number plate'),
-        ),
+        const SnackBar(content: Text('Please enter your vehicle number plate')),
       );
       _showNumberPlateBottomSheet();
       return;
@@ -1420,7 +1642,9 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
     double longitude;
     String location;
 
-    if (_selectedLatitude != null && _selectedLongitude != null && _selectedLocationAddress != null) {
+    if (_selectedLatitude != null &&
+        _selectedLongitude != null &&
+        _selectedLocationAddress != null) {
       // Use selected location
       latitude = _selectedLatitude!;
       longitude = _selectedLongitude!;
@@ -1429,14 +1653,16 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
       print('📍 [IssueReportScreen] Coordinates: $latitude, $longitude');
     } else {
       // Fallback to current location
-      print('📍 [IssueReportScreen] No location selected, getting current location...');
+      print(
+        '📍 [IssueReportScreen] No location selected, getting current location...',
+      );
       try {
         final position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high,
         );
         latitude = position.latitude;
         longitude = position.longitude;
-        
+
         // Try to get address from reverse geocoding
         try {
           final placemarks = await placemarkFromCoordinates(
@@ -1458,47 +1684,89 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
           print('⚠️ [IssueReportScreen] Could not get address: $e');
           location = 'Lat: $latitude, Lng: $longitude';
         }
-        
+
         print('📍 [IssueReportScreen] Current location: $location');
         print('📍 [IssueReportScreen] Coordinates: $latitude, $longitude');
       } catch (e) {
         print('⚠️ [IssueReportScreen] Could not get location: $e');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Please select a location or enable location services.'),
+            content: Text(
+              'Please select a location or enable location services.',
+            ),
           ),
         );
         return;
       }
     }
 
-    print('✅ [IssueReportScreen] Validation passed - Dispatching IssueReportSubmitted event');
-    
+    print(
+      '✅ [IssueReportScreen] Validation passed - Dispatching IssueReportSubmitted event',
+    );
+
     // Submit issue report with all selected media files
-    final mediaPaths = selectedMediaPaths.isNotEmpty ? selectedMediaPaths : null;
-    
+    final mediaPaths = selectedMediaPaths.isNotEmpty
+        ? selectedMediaPaths
+        : null;
+
     // Get description if "Other" category is selected
     String? description;
-    if (selectedIssue == _otherCategoryTitle && otherIssueController.text.trim().isNotEmpty) {
+    if (selectedIssue == _otherCategoryTitle &&
+        otherIssueController.text.trim().isNotEmpty) {
       description = otherIssueController.text.trim();
     }
 
+    // Get redeem code from coupon field if applied
+    String? redeemCode;
+    if (_couponApplied && _couponController.text.trim().isNotEmpty) {
+      redeemCode = _couponController.text.trim();
+    }
+
     context.read<IssueReportBloc>().add(
-          IssueReportSubmitted(
-            issueCategoryId: issueCategoryId,
-            vehicleTypeId: vehicleTypeId,
-            brandId: brandId,
-            modelId: modelId,
-            location: location,
-            latitude: latitude,
-            longitude: longitude,
-            mediaPaths: mediaPaths,
-            numberPlate: _numberPlate?.trim(),
-            description: description,
-          ),
-        );
+      IssueReportSubmitted(
+        issueCategoryId: issueCategoryId,
+        vehicleTypeId: vehicleTypeId,
+        brandId: brandId,
+        modelId: modelId,
+        location: location,
+        latitude: latitude,
+        longitude: longitude,
+        mediaPaths: mediaPaths,
+        numberPlate: _numberPlate?.trim(),
+        description: description,
+        redeemCode: redeemCode,
+      ),
+    );
     print('✅ [IssueReportScreen] Event dispatched successfully');
     print('✅ [IssueReportScreen] ========== _handleSubmit SUCCESS ==========');
+  }
+
+  Future<void> _launchPaymentUrl(String url) async {
+    try {
+      final Uri uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.inAppWebView);
+        print('✅ [IssueReportScreen] Payment URL launched successfully');
+      } else {
+        print('❌ [IssueReportScreen] Could not launch payment URL');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not open payment page. Please try again.'),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('❌ [IssueReportScreen] Error launching payment URL: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error opening payment page: ${e.toString()}'),
+          ),
+        );
+      }
+    }
   }
 }
 
@@ -1507,10 +1775,7 @@ class _VideoPlayerDialog extends StatefulWidget {
   final VideoPlayerController controller;
   final String videoPath;
 
-  const _VideoPlayerDialog({
-    required this.controller,
-    required this.videoPath,
-  });
+  const _VideoPlayerDialog({required this.controller, required this.videoPath});
 
   @override
   State<_VideoPlayerDialog> createState() => _VideoPlayerDialogState();

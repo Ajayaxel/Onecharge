@@ -1,9 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:onecharge/features/issue_report/data/models/ticket_response.dart';
 import 'package:onecharge/features/issue_report/data/repositories/issue_report_repository.dart';
 import 'package:onecharge/resources/app_resources.dart';
 import 'package:onecharge/screen/issue_report/issue_status_screen.dart';
 import 'package:onecharge/core/error/api_exception.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:open_file/open_file.dart';
 
 class MyTicketsScreen extends StatefulWidget {
   const MyTicketsScreen({super.key});
@@ -17,6 +21,7 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
   List<Ticket> _tickets = [];
   bool _isLoading = true;
   String? _errorMessage;
+  final Map<int, bool> _downloadingTickets = {}; // Track downloading state per ticket
 
   @override
   void initState() {
@@ -341,7 +346,7 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
                 const SizedBox(height: 8),
               ],
               
-              // Date and View Details Row
+              // Date and Actions Row
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -365,22 +370,68 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
                       ],
                     ),
                   
-                  // View Details
+                  // Actions Row (Download Invoice and View Details)
                   Row(
                     children: [
-                      Text(
-                        'View Details',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.black,
+                      // Download Invoice Button
+                      GestureDetector(
+                        onTap: () => _downloadInvoice(ticket),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (_downloadingTickets[ticket.id] == true)
+                                SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                                  ),
+                                )
+                              else
+                                Icon(
+                                  Icons.download_outlined,
+                                  size: 14,
+                                  color: Colors.grey[700],
+                                ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Invoice',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.grey[700],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        Icons.arrow_forward_ios,
-                        size: 14,
-                        color: Colors.black,
+                      const SizedBox(width: 12),
+                      // View Details
+                      Row(
+                        children: [
+                          Text(
+                            'View Details',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.arrow_forward_ios,
+                            size: 14,
+                            color: Colors.black,
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -408,6 +459,123 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
       return '${difference.inDays} days ago';
     } else {
       return '${date.day}/${date.month}/${date.year}';
+    }
+  }
+
+  Future<void> _downloadInvoice(Ticket ticket) async {
+    // Prevent multiple simultaneous downloads for the same ticket
+    if (_downloadingTickets[ticket.id] == true) {
+      return;
+    }
+
+    setState(() {
+      _downloadingTickets[ticket.id] = true;
+    });
+
+    try {
+      // Request storage permission for Android
+      if (Platform.isAndroid) {
+        final status = await Permission.storage.status;
+        if (!status.isGranted) {
+          final result = await Permission.storage.request();
+          if (!result.isGranted) {
+            // Try to continue anyway for Android 10+
+            print('⚠️ Storage permission not granted, attempting to save anyway');
+          }
+        }
+      }
+
+      // Download the invoice PDF
+      final pdfBytes = await _repository.downloadInvoice(ticket.id);
+
+      // Get the directory for saving the file
+      Directory? directory;
+      if (Platform.isAndroid) {
+        // Try to get Downloads directory first
+        try {
+          // Try to use Downloads folder
+          final downloadsPath = '/storage/emulated/0/Download';
+          if (await Directory(downloadsPath).exists()) {
+            directory = Directory(downloadsPath);
+          } else {
+            // Fallback to app's external storage
+            directory = await getExternalStorageDirectory();
+          }
+        } catch (e) {
+          // Fallback to app documents directory
+          directory = await getApplicationDocumentsDirectory();
+        }
+      } else {
+        // For iOS, save to app's documents directory
+        directory = await getApplicationDocumentsDirectory();
+      }
+
+      if (directory == null) {
+        throw Exception('Could not access storage directory');
+      }
+
+      // Create file name with ticket ID
+      final fileName = 'Invoice_${ticket.ticketId}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final filePath = '${directory.path}/$fileName';
+
+      // Write the PDF file
+      final file = File(filePath);
+      await file.writeAsBytes(pdfBytes);
+
+      if (mounted) {
+        setState(() {
+          _downloadingTickets[ticket.id] = false;
+        });
+
+        // Show download success notification
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Invoice downloaded successfully: $fileName'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        // Open the PDF file
+        final result = await OpenFile.open(filePath);
+        
+        if (result.type != ResultType.done) {
+          // If opening failed, show additional message with file location
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('PDF saved at: ${directory.path}'),
+              backgroundColor: Colors.blue,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() {
+          _downloadingTickets[ticket.id] = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error downloading invoice: ${e.message}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _downloadingTickets[ticket.id] = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error downloading invoice: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 }

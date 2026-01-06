@@ -12,6 +12,8 @@ import '../models/create_ticket_request.dart';
 import '../models/vehicle_type.dart';
 import '../models/brand_model.dart';
 import '../models/model_item.dart';
+import '../models/driver_location_response.dart';
+import '../models/redeem_code_validation_response.dart';
 
 class IssueReportApiService {
   IssueReportApiService({Dio? dio}) : _dio = dio ?? ApiClient.instance;
@@ -190,15 +192,82 @@ class IssueReportApiService {
     print('🔵 [IssueReportApiService] Request: ${request.toJson()}');
 
     try {
-      /// Send request
+      // Build form data
+      final formDataMap = <String, dynamic>{
+        'issue_category_id': request.issueCategoryId.toString(),
+        'vehicle_type_id': request.vehicleTypeId.toString(),
+        'brand_id': request.brandId.toString(),
+        'model_id': request.modelId.toString(),
+        'number_plate': request.numberPlate,
+        'location': request.location,
+      };
+
+      // Add optional fields
+      if (request.latitude != null) {
+        formDataMap['latitude'] = request.latitude.toString();
+      }
+      if (request.longitude != null) {
+        formDataMap['longitude'] = request.longitude.toString();
+      }
+      if (request.description != null && request.description!.isNotEmpty) {
+        formDataMap['description'] = request.description;
+      }
+      if (request.redeemCode != null && request.redeemCode!.isNotEmpty) {
+        formDataMap['redeem_code'] = request.redeemCode;
+      }
+
+      // Handle file attachments - if attachments are file paths, convert them to MultipartFile
+      // Otherwise, if they're already uploaded URLs, add them as strings
+      if (request.attachments != null && request.attachments!.isNotEmpty) {
+        final attachmentFiles = <MultipartFile>[];
+        final attachmentUrls = <String>[];
+        
+        for (final attachment in request.attachments!) {
+          // Check if it's a local file path or a URL
+          if (attachment.startsWith('http://') || attachment.startsWith('https://')) {
+            // It's already an uploaded URL
+            attachmentUrls.add(attachment);
+          } else {
+            // It's a local file path - try to create MultipartFile
+            final file = File(attachment);
+            if (await file.exists()) {
+              final fileName = attachment.split('/').last;
+              final multipartFile = await MultipartFile.fromFile(
+                attachment,
+                filename: fileName,
+              );
+              attachmentFiles.add(multipartFile);
+            }
+          }
+        }
+        
+        // Add file attachments as MultipartFile array
+        if (attachmentFiles.isNotEmpty) {
+          formDataMap['attachments[]'] = attachmentFiles;
+        }
+        
+        // If we have URLs, we might need to send them differently
+        // For now, we'll prioritize files over URLs if both exist
+        // If only URLs exist, we might need to adjust the API call
+        // This depends on API requirements - assuming files take precedence
+      }
+
+      final formData = FormData.fromMap(formDataMap);
+
+      print('🔵 [IssueReportApiService] FormData created with ${formDataMap.length} fields');
+      if (request.attachments != null) {
+        print('🔵 [IssueReportApiService] Attachments count: ${request.attachments!.length}');
+      }
+
+      /// Send request as form-data
       final response = await _dio.post(
         ApiConfig.tickets,
-        data: request.toJson(),
+        data: formData,
         options: Options(
           headers: {
             'Authorization': 'Bearer $token',
             'Accept': 'application/json',
-            'Content-Type': 'application/json',
+            // Don't set Content-Type - Dio will set it automatically for FormData with boundary
           },
           sendTimeout: const Duration(seconds: 60),
           receiveTimeout: const Duration(seconds: 60),
@@ -657,6 +726,155 @@ class IssueReportApiService {
     } catch (e) {
       print('❌ [IssueReportApiService] Unexpected error: $e');
       throw ApiException('Unable to fetch tickets: ${e.toString()}');
+    }
+  }
+
+  /// Get driver location for a specific ticket
+  Future<DriverLocationResponse> getDriverLocation(String token, int ticketId) async {
+    try {
+      print('🔵 [IssueReportApiService] ========== getDriverLocation START ==========');
+      print('🔵 [IssueReportApiService] Ticket ID: $ticketId');
+      
+      final url = '${ApiConfig.driverLocation}/$ticketId/driver';
+      final fullUrl = '${ApiConfig.baseUrl}$url';
+      print('🔵 [IssueReportApiService] Request URL: $fullUrl');
+      
+      final response = await _dio.get(
+        url,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Accept': 'application/json',
+          },
+        ),
+      );
+
+      print('✅ [IssueReportApiService] Response Status: ${response.statusCode}');
+      print('✅ [IssueReportApiService] Response Data: ${response.data}');
+      print('✅ [IssueReportApiService] ========== getDriverLocation SUCCESS ==========');
+      
+      return DriverLocationResponse.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (error) {
+      print('❌ [IssueReportApiService] ========== DIO EXCEPTION ==========');
+      print('❌ [IssueReportApiService] DioException type: ${error.type}');
+      print('❌ [IssueReportApiService] DioException message: ${error.message}');
+      print('❌ [IssueReportApiService] Status code: ${error.response?.statusCode}');
+      print('❌ [IssueReportApiService] Response data: ${error.response?.data}');
+      print('❌ [IssueReportApiService] ========== DIO EXCEPTION END ==========');
+      
+      final status = error.response?.statusCode;
+      final data = error.response?.data;
+
+      String message = "Unable to fetch driver location";
+      if (data is Map<String, dynamic> && data['message'] != null) {
+        message = data['message'] as String;
+      } else if (error.message != null) {
+        message = error.message!;
+      }
+
+      throw ApiException(message, statusCode: status);
+    } catch (e) {
+      print('❌ [IssueReportApiService] ========== UNEXPECTED ERROR ==========');
+      print('❌ [IssueReportApiService] Unexpected error: $e');
+      print('❌ [IssueReportApiService] Error type: ${e.runtimeType}');
+      print('❌ [IssueReportApiService] ========== UNEXPECTED ERROR END ==========');
+      throw ApiException('Unable to fetch driver location: ${e.toString()}');
+    }
+  }
+
+  /// Download invoice PDF for a ticket
+  Future<List<int>> downloadInvoice(String token, int ticketId) async {
+    try {
+      print('🔵 [IssueReportApiService] ========== downloadInvoice START ==========');
+      print('🔵 [IssueReportApiService] Ticket ID: $ticketId');
+      
+      final url = ApiConfig.invoiceDownload(ticketId);
+      final fullUrl = '${ApiConfig.baseUrl}$url';
+      print('🔵 [IssueReportApiService] Request URL: $fullUrl');
+      
+      final response = await _dio.get(
+        url,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Accept': 'application/pdf',
+          },
+          responseType: ResponseType.bytes,
+        ),
+      );
+
+      print('✅ [IssueReportApiService] Response Status: ${response.statusCode}');
+      print('✅ [IssueReportApiService] PDF size: ${(response.data as List<int>).length} bytes');
+      print('✅ [IssueReportApiService] ========== downloadInvoice SUCCESS ==========');
+      
+      return response.data as List<int>;
+    } on DioException catch (error) {
+      print('❌ [IssueReportApiService] DioException: ${error.message}');
+      final status = error.response?.statusCode;
+      final data = error.response?.data;
+
+      String message = "Unable to download invoice";
+      
+      // Handle 404 specifically - invoice not found
+      if (status == 404) {
+        message = "Invoice not available for this ticket. It may not have been generated yet.";
+      } else if (data is Map<String, dynamic> && data['message'] != null) {
+        message = data['message'] as String;
+      } else if (error.message != null) {
+        message = error.message!;
+      }
+
+      throw ApiException(message, statusCode: status);
+    } catch (e) {
+      print('❌ [IssueReportApiService] Unexpected error: $e');
+      throw ApiException('Unable to download invoice: ${e.toString()}');
+    }
+  }
+
+  /// Validate redeem code
+  Future<RedeemCodeValidationResponse> validateRedeemCode(
+    String token,
+    String redeemCode,
+  ) async {
+    try {
+      print('🔵 [IssueReportApiService] ========== validateRedeemCode START ==========');
+      print('🔵 [IssueReportApiService] Redeem code: $redeemCode');
+      
+      final response = await _dio.post(
+        ApiConfig.validateRedeemCode,
+        data: {
+          'code': redeemCode,
+        },
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+
+      print('✅ [IssueReportApiService] Response Status: ${response.statusCode}');
+      print('✅ [IssueReportApiService] Response Data: ${response.data}');
+      print('✅ [IssueReportApiService] ========== validateRedeemCode SUCCESS ==========');
+      
+      return RedeemCodeValidationResponse.fromJson(response.data);
+    } on DioException catch (error) {
+      print('❌ [IssueReportApiService] DioException: ${error.message}');
+      final status = error.response?.statusCode;
+      final data = error.response?.data;
+
+      String message = "Something went wrong";
+      if (data is Map<String, dynamic> && data['message'] != null) {
+        message = data['message'] as String;
+      } else if (error.message != null) {
+        message = error.message!;
+      }
+
+      throw ApiException(message, statusCode: status);
+    } catch (e) {
+      print('❌ [IssueReportApiService] Unexpected error: $e');
+      throw ApiException('Unable to validate redeem code: ${e.toString()}');
     }
   }
 }

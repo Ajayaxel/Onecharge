@@ -1,10 +1,15 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:onecharge/const/onebtn.dart';
 import 'package:onecharge/resources/app_resources.dart';
 import 'package:onecharge/features/issue_report/data/repositories/issue_report_repository.dart';
 import 'package:onecharge/features/issue_report/data/models/ticket_response.dart';
 import 'package:onecharge/core/error/api_exception.dart';
+import 'package:onecharge/screen/issue_report/driver_location_map_screen.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:open_file/open_file.dart';
 
 class IssueStatusScreen extends StatefulWidget {
   const IssueStatusScreen({
@@ -30,6 +35,7 @@ class _IssueStatusScreenState extends State<IssueStatusScreen> {
   String? _errorMessage;
   String? _previousStatus; // Track previous status to detect changes
   bool _hasStatusChanged = false; // Flag to show status change notification
+  bool _isDownloading = false; // Flag to track download state
   
   int _currentStage = 0; // 0: We received, 1: Partner Assigned, 2: Issue Resolved
 
@@ -232,6 +238,13 @@ class _IssueStatusScreenState extends State<IssueStatusScreen> {
     }
   }
 
+  bool _isTicketCompleted(String status) {
+    final lowerStatus = status.toLowerCase();
+    return lowerStatus.contains('resolved') || 
+           lowerStatus.contains('closed') || 
+           lowerStatus == 'completed';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -255,6 +268,18 @@ class _IssueStatusScreenState extends State<IssueStatusScreen> {
           ),
         ),
         centerTitle: true,
+        actions: [
+          // Show map icon only when driver is assigned AND ticket is not completed
+          if (_currentTicket?.driver != null && !_isTicketCompleted(_currentTicket!.status))
+            IconButton(
+              icon: const Icon(
+                Icons.map_outlined,
+                color: AppColors.textColor,
+              ),
+              onPressed: () => _openDriverLocationMap(),
+              tooltip: 'View driver location',
+            ),
+        ],
       ),
       body: SafeArea(
         child: Padding(
@@ -375,6 +400,42 @@ class _IssueStatusScreenState extends State<IssueStatusScreen> {
               ],
               
               const SizedBox(height: 40),
+              
+              // Download Invoice Button (only when completed)
+              if (_currentStage == 2 && _currentTicket != null) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _isDownloading ? null : _downloadInvoice,
+                    icon: _isDownloading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Icon(Icons.download, color: Colors.white),
+                    label: Text(
+                      _isDownloading ? 'Downloading...' : 'Download Invoice PDF',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               
               // Action Button - Always Refresh (except when completed, it will auto-navigate)
               SizedBox(
@@ -522,6 +583,148 @@ class _IssueStatusScreenState extends State<IssueStatusScreen> {
         return 'All the issues you mentioned have been resolved';
       default:
         return '';
+    }
+  }
+
+  void _openDriverLocationMap() {
+    if (_currentTicket == null) return;
+    
+    final ticketLat = double.tryParse(_currentTicket!.latitude) ?? 0;
+    final ticketLng = double.tryParse(_currentTicket!.longitude) ?? 0;
+    
+    if (ticketLat == 0 || ticketLng == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ticket location not available'),
+        ),
+      );
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => DriverLocationMapScreen(
+          ticketId: _currentTicket!.id,
+          ticketLatitude: ticketLat,
+          ticketLongitude: ticketLng,
+          driverName: _currentTicket!.driver?.name,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _downloadInvoice() async {
+    if (_currentTicket == null) return;
+
+    setState(() {
+      _isDownloading = true;
+    });
+
+    try {
+      // Request storage permission for Android
+      if (Platform.isAndroid) {
+        // For Android 10+ (API 29+), we might not need storage permission for Downloads
+        // But we'll request it anyway for older versions
+        final status = await Permission.storage.status;
+        if (!status.isGranted) {
+          final result = await Permission.storage.request();
+          if (!result.isGranted) {
+            // Try to continue anyway for Android 10+
+            print('⚠️ Storage permission not granted, attempting to save anyway');
+          }
+        }
+      }
+
+      // Download the invoice PDF
+      final pdfBytes = await _repository.downloadInvoice(_currentTicket!.id);
+
+      // Get the directory for saving the file
+      Directory? directory;
+      if (Platform.isAndroid) {
+        // Try to get Downloads directory first
+        try {
+          directory = await getExternalStorageDirectory();
+          // Try to use Downloads folder
+          final downloadsPath = '/storage/emulated/0/Download';
+          if (await Directory(downloadsPath).exists()) {
+            directory = Directory(downloadsPath);
+          } else {
+            // Fallback to app's external storage
+            directory = await getExternalStorageDirectory();
+          }
+        } catch (e) {
+          // Fallback to app documents directory
+          directory = await getApplicationDocumentsDirectory();
+        }
+      } else {
+        // For iOS, save to app's documents directory
+        directory = await getApplicationDocumentsDirectory();
+      }
+
+      if (directory == null) {
+        throw Exception('Could not access storage directory');
+      }
+
+      // Create file name with ticket ID
+      final fileName = 'Invoice_${_currentTicket!.ticketId}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final filePath = '${directory.path}/$fileName';
+
+      // Write the PDF file
+      final file = File(filePath);
+      await file.writeAsBytes(pdfBytes);
+
+      if (mounted) {
+        setState(() {
+          _isDownloading = false;
+        });
+
+        // Show download success notification
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Invoice downloaded successfully: $fileName'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        // Open the PDF file
+        final result = await OpenFile.open(filePath);
+        
+        if (result.type != ResultType.done) {
+          // If opening failed, show additional message with file location
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('PDF saved at: ${directory.path}'),
+              backgroundColor: Colors.blue,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() {
+          _isDownloading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error downloading invoice: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isDownloading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error downloading invoice: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 }

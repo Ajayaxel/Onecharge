@@ -6,6 +6,8 @@ import '../models/create_ticket_request.dart';
 import '../models/vehicle_type.dart';
 import '../models/brand_model.dart';
 import '../models/model_item.dart';
+import '../models/driver_location_response.dart';
+import '../models/redeem_code_validation_response.dart';
 import '../../../../core/storage/token_storage.dart';
 
 class IssueReportRepository {
@@ -132,6 +134,30 @@ class IssueReportRepository {
       throw Exception('Please login to continue.');
     }
     return await _apiService.getAllTickets(token);
+  }
+
+  Future<DriverLocationResponse> getDriverLocation(int ticketId) async {
+    final token = await TokenStorage.readToken();
+    if (token == null || token.isEmpty) {
+      throw Exception('Please login to continue.');
+    }
+    return await _apiService.getDriverLocation(token, ticketId);
+  }
+
+  Future<List<int>> downloadInvoice(int ticketId) async {
+    final token = await TokenStorage.readToken();
+    if (token == null || token.isEmpty) {
+      throw Exception('Please login to continue.');
+    }
+    return await _apiService.downloadInvoice(token, ticketId);
+  }
+
+  Future<RedeemCodeValidationResponse> validateRedeemCode(String redeemCode) async {
+    final token = await TokenStorage.readToken();
+    if (token == null || token.isEmpty) {
+      throw Exception('Please login to continue.');
+    }
+    return await _apiService.validateRedeemCode(token, redeemCode);
   }
 }
 

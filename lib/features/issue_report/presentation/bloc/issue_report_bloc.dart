@@ -1,12 +1,11 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/error/api_exception.dart';
-import '../../../../core/storage/token_storage.dart';
 import '../../data/models/ticket_response.dart';
 import '../../data/models/create_ticket_request.dart';
+import '../../data/models/redeem_code_validation_response.dart';
 import '../../data/repositories/issue_report_repository.dart';
 
 part 'issue_report_event.dart';
@@ -17,6 +16,7 @@ class IssueReportBloc extends Bloc<IssueReportEvent, IssueReportState> {
     on<IssueReportSubmitted>(_onIssueReportSubmitted);
     on<CreateTicketSubmitted>(_onCreateTicketSubmitted);
     on<FileUploadProgress>(_onFileUploadProgress);
+    on<ValidateRedeemCode>(_onValidateRedeemCode);
   }
 
   final IssueReportRepository _repository;
@@ -55,20 +55,13 @@ class IssueReportBloc extends Bloc<IssueReportEvent, IssueReportState> {
     print('🟡 [IssueReportBloc] State changed to: loading');
     
     try {
-      // First upload files if any
-      List<String>? uploadedAttachments;
-      if (event.mediaPaths != null && event.mediaPaths!.isNotEmpty) {
-        print('📤 [IssueReportBloc] Uploading ${event.mediaPaths!.length} files...');
-        uploadedAttachments = await _repository.uploadFiles(event.mediaPaths!);
-        print('✅ [IssueReportBloc] Files uploaded: ${uploadedAttachments.length}');
-      }
-
       print('🟡 [IssueReportBloc] Calling repository...');
       
       // Use CreateTicketRequest if numberPlate is provided, otherwise use legacy method
       TicketResponse response;
       if (event.numberPlate != null && event.numberPlate!.isNotEmpty) {
         print('🟡 [IssueReportBloc] Using CreateTicketRequest with number plate');
+        // Pass file paths directly to match API requirements
         final request = CreateTicketRequest(
           issueCategoryId: event.issueCategoryId,
           vehicleTypeId: event.vehicleTypeId,
@@ -79,11 +72,13 @@ class IssueReportBloc extends Bloc<IssueReportEvent, IssueReportState> {
           latitude: event.latitude,
           longitude: event.longitude,
           description: event.description,
-          attachments: uploadedAttachments,
+          attachments: event.mediaPaths, // Pass file paths directly
+          redeemCode: event.redeemCode,
         );
         response = await _repository.createTicket(request);
       } else {
         print('🟡 [IssueReportBloc] Using legacy submitIssueReport method');
+        // Pass file paths directly to match API requirements
         response = await _repository.submitIssueReport(
           issueCategoryId: event.issueCategoryId,
           vehicleTypeId: event.vehicleTypeId,
@@ -92,7 +87,7 @@ class IssueReportBloc extends Bloc<IssueReportEvent, IssueReportState> {
           location: event.location,
           latitude: event.latitude,
           longitude: event.longitude,
-          attachments: uploadedAttachments,
+          attachments: event.mediaPaths, // Pass file paths directly
         );
       }
       print('✅ [IssueReportBloc] Repository call successful');
@@ -107,6 +102,8 @@ class IssueReportBloc extends Bloc<IssueReportEvent, IssueReportState> {
           status: IssueReportStatus.success,
           ticket: response.ticket,
           message: response.message,
+          paymentRequired: response.paymentRequired,
+          paymentUrl: response.paymentUrl,
         ),
       );
       print('✅ [IssueReportBloc] State changed to: success');
@@ -184,91 +181,8 @@ class IssueReportBloc extends Bloc<IssueReportEvent, IssueReportState> {
     });
     
     try {
-      // First upload files if any
-      List<String>? uploadedAttachments;
-      if (event.mediaPaths != null && event.mediaPaths!.isNotEmpty) {
-        print('📤 [IssueReportBloc] Uploading ${event.mediaPaths!.length} files...');
-        
-        final token = await TokenStorage.readToken();
-        if (token == null || token.isEmpty) {
-          _uploadTimer?.cancel();
-          throw ApiException('Please login to continue.', statusCode: 401);
-        }
-
-        uploadedAttachments = [];
-        final totalFiles = event.mediaPaths!.length;
-        
-        for (int i = 0; i < event.mediaPaths!.length; i++) {
-          final filePath = event.mediaPaths![i];
-          final file = File(filePath);
-          final fileName = filePath.split('/').last;
-          
-          if (!await file.exists()) {
-            print('⚠️ [IssueReportBloc] File not found: $filePath');
-            continue;
-          }
-
-          // Emit progress for current file start
-          emit(
-            state.copyWith(
-              status: IssueReportStatus.uploading,
-              currentUploadingFile: i + 1,
-              totalFiles: totalFiles,
-              uploadProgress: i / totalFiles, // Progress before this file
-              currentFileProgress: 0.0,
-              currentFileName: fileName,
-            ),
-          );
-
-          try {
-            // Upload file with progress tracking
-            final uploadedPath = await _repository.uploadFile(
-              file,
-              token,
-              onProgress: (sent, total) {
-                // Calculate overall progress
-                // Progress = (completed files + current file progress) / total files
-                final fileProgress = total > 0 ? sent / total : 0.0;
-                final overallProgress = (i + fileProgress) / totalFiles;
-                
-                // Emit progress update
-                emit(
-                  state.copyWith(
-                    status: IssueReportStatus.uploading,
-                    currentUploadingFile: i + 1,
-                    totalFiles: totalFiles,
-                    uploadProgress: overallProgress,
-                    currentFileProgress: fileProgress,
-                    currentFileName: fileName,
-                  ),
-                );
-              },
-            );
-            uploadedAttachments.add(uploadedPath);
-            
-            // Emit progress after successful upload
-            emit(
-              state.copyWith(
-                status: IssueReportStatus.uploading,
-                currentUploadingFile: i + 1,
-                totalFiles: totalFiles,
-                uploadProgress: (i + 1) / totalFiles,
-                currentFileProgress: 1.0,
-                currentFileName: fileName,
-              ),
-            );
-            
-            print('✅ [IssueReportBloc] File ${i + 1}/$totalFiles uploaded: $uploadedPath');
-          } catch (e) {
-            print('❌ [IssueReportBloc] Error uploading file $filePath: $e');
-            // Continue with other files even if one fails
-          }
-        }
-        
-        print('✅ [IssueReportBloc] Files uploaded: ${uploadedAttachments.length}');
-      }
-
-      // Stop timer and change status to loading for ticket creation
+      // Files will be sent directly in the ticket creation request
+      // Change status to loading for ticket creation (which includes file upload)
       _uploadTimer?.cancel();
       _uploadStartTime = null;
       emit(
@@ -280,7 +194,9 @@ class IssueReportBloc extends Bloc<IssueReportEvent, IssueReportState> {
         ),
       );
 
-      print('🟡 [IssueReportBloc] Creating ticket...');
+      print('🟡 [IssueReportBloc] Creating ticket with files...');
+      // Pass file paths directly to match API requirements
+      // The API service will handle sending files as MultipartFile
       final request = CreateTicketRequest(
         issueCategoryId: event.issueCategoryId,
         vehicleTypeId: event.vehicleTypeId,
@@ -291,13 +207,16 @@ class IssueReportBloc extends Bloc<IssueReportEvent, IssueReportState> {
         latitude: event.latitude,
         longitude: event.longitude,
         description: event.description,
-        attachments: uploadedAttachments,
+        attachments: event.mediaPaths, // Pass file paths directly
+        redeemCode: event.redeemCode,
       );
       
       final response = await _repository.createTicket(request);
       print('✅ [IssueReportBloc] Repository call successful');
       print('✅ [IssueReportBloc] Response success: ${response.success}');
       print('✅ [IssueReportBloc] Response message: ${response.message}');
+      print('✅ [IssueReportBloc] Payment required: ${response.paymentRequired}');
+      print('✅ [IssueReportBloc] Payment URL: ${response.paymentUrl}');
       print('✅ [IssueReportBloc] Ticket ID: ${response.ticket.id}');
       print('✅ [IssueReportBloc] Ticket ID (ticket_id): ${response.ticket.ticketId}');
       print('✅ [IssueReportBloc] Ticket status: ${response.ticket.status}');
@@ -307,6 +226,8 @@ class IssueReportBloc extends Bloc<IssueReportEvent, IssueReportState> {
           status: IssueReportStatus.success,
           ticket: response.ticket,
           message: response.message,
+          paymentRequired: response.paymentRequired,
+          paymentUrl: response.paymentUrl,
         ),
       );
       print('✅ [IssueReportBloc] State changed to: success');
@@ -353,6 +274,73 @@ class IssueReportBloc extends Bloc<IssueReportEvent, IssueReportState> {
         totalFiles: event.totalFiles,
       ),
     );
+  }
+
+  Future<void> _onValidateRedeemCode(
+    ValidateRedeemCode event,
+    Emitter<IssueReportState> emit,
+  ) async {
+    print('🟡 [IssueReportBloc] ========== _onValidateRedeemCode START ==========');
+    print('🟡 [IssueReportBloc] Validating redeem code: ${event.redeemCode}');
+    
+    emit(
+      state.copyWith(
+        isValidatingCoupon: true,
+        couponValidated: false,
+        couponValidationError: null,
+        couponValidationData: null,
+      ),
+    );
+
+    try {
+      final response = await _repository.validateRedeemCode(event.redeemCode);
+      
+      print('✅ [IssueReportBloc] Validation successful');
+      print('✅ [IssueReportBloc] Valid: ${response.data.valid}');
+      print('✅ [IssueReportBloc] Discount amount: ${response.data.discountAmount}');
+      
+      if (response.success && response.data.valid) {
+        emit(
+          state.copyWith(
+            isValidatingCoupon: false,
+            couponValidated: true,
+            couponValidationError: null,
+            couponValidationData: response.data,
+          ),
+        );
+      } else {
+        emit(
+          state.copyWith(
+            isValidatingCoupon: false,
+            couponValidated: false,
+            couponValidationError: response.message,
+            couponValidationData: null,
+          ),
+        );
+      }
+    } on ApiException catch (error) {
+      print('❌ [IssueReportBloc] ApiException: ${error.message}');
+      emit(
+        state.copyWith(
+          isValidatingCoupon: false,
+          couponValidated: false,
+          couponValidationError: error.message,
+          couponValidationData: null,
+        ),
+      );
+    } catch (e) {
+      print('❌ [IssueReportBloc] Unexpected error: $e');
+      emit(
+        state.copyWith(
+          isValidatingCoupon: false,
+          couponValidated: false,
+          couponValidationError: 'Failed to validate coupon code. Please try again.',
+          couponValidationData: null,
+        ),
+      );
+    }
+    
+    print('✅ [IssueReportBloc] ========== _onValidateRedeemCode END ==========');
   }
 }
 

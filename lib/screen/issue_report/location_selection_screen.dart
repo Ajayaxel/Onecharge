@@ -20,6 +20,7 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
   final FocusNode _searchFocusNode = FocusNode();
   GoogleMapController? _mapController;
   static const LatLng _defaultLocation = LatLng(11.6994, 76.0773);
+  int _lastCameraMoveId = 0;
 
   @override
   void initState() {
@@ -43,6 +44,25 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
 
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
+    // If current location is already available, animate to it
+    final state = _locationCubit.state;
+    final target = state.currentLocation ?? state.selectedLocation;
+    if (target != null) {
+      _animateToLocation(target);
+    }
+  }
+
+  Future<void> _animateToLocation(LatLng location) async {
+    if (_mapController != null) {
+      await _mapController!.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: location,
+            zoom: 15,
+          ),
+        ),
+      );
+    }
   }
 
   void _onMapTap(LatLng position) {
@@ -103,40 +123,52 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
         body: Stack(
           children: [
             // Map
-            BlocBuilder<LocationCubit, LocationState>(
-              builder: (context, state) {
-                final target = state.selectedLocation ?? state.currentLocation ?? _defaultLocation;
-                final markers = <Marker>{};
-
-                markers.add(
-                  Marker(
-                    markerId: const MarkerId('selected-location'),
-                    position: target,
-                    infoWindow: InfoWindow(
-                      title: 'Issue Location',
-                      snippet: state.selectedAddress ??
-                          '${target.latitude.toStringAsFixed(4)}, ${target.longitude.toStringAsFixed(4)}',
-                    ),
-                    draggable: true,
-                    onDragEnd: _onMarkerDragEnd,
-                  ),
-                );
-
-                return GoogleMap(
-                  mapType: MapType.normal,
-                  initialCameraPosition: CameraPosition(
-                    target: target,
-                    zoom: target == _defaultLocation ? 11 : 15,
-                  ),
-                  markers: markers,
-                  zoomControlsEnabled: false,
-                  myLocationButtonEnabled: false,
-                  myLocationEnabled: state.currentLocation != null,
-                  compassEnabled: true,
-                  onMapCreated: _onMapCreated,
-                  onTap: _onMapTap,
-                );
+            BlocListener<LocationCubit, LocationState>(
+              listener: (context, state) {
+                // Animate to current location when it's fetched
+                if (state.cameraMoveId != _lastCameraMoveId && state.cameraMoveId > 0) {
+                  _lastCameraMoveId = state.cameraMoveId;
+                  final target = state.selectedLocation ?? state.currentLocation;
+                  if (target != null && _mapController != null) {
+                    _animateToLocation(target);
+                  }
+                }
               },
+              child: BlocBuilder<LocationCubit, LocationState>(
+                builder: (context, state) {
+                  final target = state.selectedLocation ?? state.currentLocation ?? _defaultLocation;
+                  final markers = <Marker>{};
+
+                  markers.add(
+                    Marker(
+                      markerId: const MarkerId('selected-location'),
+                      position: target,
+                      infoWindow: InfoWindow(
+                        title: 'Issue Location',
+                        snippet: state.selectedAddress ??
+                            '${target.latitude.toStringAsFixed(4)}, ${target.longitude.toStringAsFixed(4)}',
+                      ),
+                      draggable: true,
+                      onDragEnd: _onMarkerDragEnd,
+                    ),
+                  );
+
+                  return GoogleMap(
+                    mapType: MapType.normal,
+                    initialCameraPosition: CameraPosition(
+                      target: target,
+                      zoom: target == _defaultLocation ? 11 : 15,
+                    ),
+                    markers: markers,
+                    zoomControlsEnabled: false,
+                    myLocationButtonEnabled: false,
+                    myLocationEnabled: state.currentLocation != null,
+                    compassEnabled: true,
+                    onMapCreated: _onMapCreated,
+                    onTap: _onMapTap,
+                  );
+                },
+              ),
             ),
 
             // Search Section

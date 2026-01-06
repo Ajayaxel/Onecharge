@@ -19,6 +19,7 @@ class IssueReportSubmitted extends IssueReportEvent {
     this.mediaPaths,
     this.numberPlate,
     this.description,
+    this.redeemCode,
   });
 
   final int issueCategoryId;
@@ -31,6 +32,7 @@ class IssueReportSubmitted extends IssueReportEvent {
   final List<String>? mediaPaths;
   final String? numberPlate;
   final String? description;
+  final String? redeemCode;
 
   @override
   List<Object?> get props => [
@@ -44,6 +46,7 @@ class IssueReportSubmitted extends IssueReportEvent {
         mediaPaths,
         numberPlate,
         description,
+        redeemCode,
       ];
 }
 
@@ -59,6 +62,7 @@ class CreateTicketSubmitted extends IssueReportEvent {
     this.longitude,
     this.description,
     this.mediaPaths,
+    this.redeemCode,
   });
 
   final int issueCategoryId;
@@ -71,6 +75,7 @@ class CreateTicketSubmitted extends IssueReportEvent {
   final double? longitude;
   final String? description;
   final List<String>? mediaPaths;
+  final String? redeemCode;
 
   @override
   List<Object?> get props => [
@@ -84,6 +89,7 @@ class CreateTicketSubmitted extends IssueReportEvent {
         longitude,
         description,
         mediaPaths,
+        redeemCode,
       ];
 }
 
@@ -100,5 +106,16 @@ class FileUploadProgress extends IssueReportEvent {
 
   @override
   List<Object?> get props => [fileIndex, progress, totalFiles];
+}
+
+class ValidateRedeemCode extends IssueReportEvent {
+  const ValidateRedeemCode({
+    required this.redeemCode,
+  });
+
+  final String redeemCode;
+
+  @override
+  List<Object?> get props => [redeemCode];
 }
 

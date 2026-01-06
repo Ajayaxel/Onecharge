@@ -71,10 +71,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   }
 
   Future<void> _loadInitialData() async {
-    await Future.wait([
-      _fetchIssueCategories(),
-      _fetchVehicleTypes(),
-    ]);
+    await Future.wait([_fetchIssueCategories(), _fetchVehicleTypes()]);
   }
 
   Future<void> _fetchIssueCategories() async {
@@ -169,9 +166,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
 
   Future<void> _selectLocation() async {
     final result = await Navigator.of(context).push<Map<String, dynamic>>(
-      MaterialPageRoute(
-        builder: (context) => const LocationSelectionScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const LocationSelectionScreen()),
     );
 
     if (result != null && mounted) {
@@ -194,7 +189,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Photo library permission is required to select photos.'),
+                content: Text(
+                  'Photo library permission is required to select photos.',
+                ),
               ),
             );
           }
@@ -229,20 +226,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         return false;
       }
     } else if (Platform.isAndroid) {
-      final status = await Permission.photos.status;
-      if (status.isDenied) {
-        final result = await Permission.photos.request();
-        if (result.isDenied) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Photo library permission is required to select photos.'),
-              ),
-            );
-          }
-          return false;
-        }
-      }
+      // On Android 13+, image_picker uses the system photo picker which doesn't require permissions.
+      // For older versions, image_picker handles permissions internally as needed.
+      return true;
     }
     return true;
   }
@@ -282,7 +268,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     if (!hasPermission) {
       return;
     }
-    
+
     try {
       final List<XFile> images = await _imagePicker.pickMultiImage(
         imageQuality: 85,
@@ -307,7 +293,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     if (!hasPermission) {
       return;
     }
-    
+
     try {
       final XFile? video = await _imagePicker.pickVideo(
         source: ImageSource.gallery,
@@ -383,16 +369,16 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     }
 
     if (_selectedBrand == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a brand')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please select a brand')));
       return;
     }
 
     if (_selectedModel == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a model')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please select a model')));
       return;
     }
 
@@ -412,7 +398,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     if (_selectedIssueCategory!.id == 6) {
       if (_descriptionController.text.trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Description is required for this issue category')),
+          const SnackBar(
+            content: Text('Description is required for this issue category'),
+          ),
         );
         return;
       }
@@ -420,29 +408,29 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
 
     // Validate location
     if (_locationController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a location')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please select a location')));
       return;
     }
 
     // Submit ticket
     context.read<IssueReportBloc>().add(
-          CreateTicketSubmitted(
-            issueCategoryId: _selectedIssueCategory!.id,
-            vehicleTypeId: _selectedVehicleType!.id,
-            brandId: _selectedBrand!.id,
-            modelId: _selectedModel!.id,
-            numberPlate: numberPlate,
-            location: _locationController.text.trim(),
-            latitude: _selectedLatitude,
-            longitude: _selectedLongitude,
-            description: _descriptionController.text.trim().isNotEmpty
-                ? _descriptionController.text.trim()
-                : null,
-            mediaPaths: _selectedFiles.isNotEmpty ? _selectedFiles : null,
-          ),
-        );
+      CreateTicketSubmitted(
+        issueCategoryId: _selectedIssueCategory!.id,
+        vehicleTypeId: _selectedVehicleType!.id,
+        brandId: _selectedBrand!.id,
+        modelId: _selectedModel!.id,
+        numberPlate: numberPlate,
+        location: _locationController.text.trim(),
+        latitude: _selectedLatitude,
+        longitude: _selectedLongitude,
+        description: _descriptionController.text.trim().isNotEmpty
+            ? _descriptionController.text.trim()
+            : null,
+        mediaPaths: _selectedFiles.isNotEmpty ? _selectedFiles : null,
+      ),
+    );
   }
 
   @override
@@ -465,7 +453,10 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
           backgroundColor: Colors.white,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.textColor),
+            icon: const Icon(
+              Icons.arrow_back_ios_new,
+              color: AppColors.textColor,
+            ),
             onPressed: () => Navigator.of(context).pop(),
           ),
           title: const Text(
@@ -496,29 +487,35 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                   if (context.mounted) {
                     Navigator.pushAndRemoveUntil(
                       context,
-                      MaterialPageRoute(builder: (context) => const PhoneLogin()),
+                      MaterialPageRoute(
+                        builder: (context) => const PhoneLogin(),
+                      ),
                       (route) => false,
                     );
                   }
                 });
-              } else if (state.statusCode == 422 || (state.errors != null && state.errors!.isNotEmpty)) {
+              } else if (state.statusCode == 422 ||
+                  (state.errors != null && state.errors!.isNotEmpty)) {
                 // Validation errors - show on form
                 setState(() {
                   // Set field-specific errors
                   if (state.errors != null) {
                     if (state.errors!.containsKey('number_plate')) {
-                      _numberPlateError = state.errors!['number_plate']?.join(', ') ?? '';
+                      _numberPlateError =
+                          state.errors!['number_plate']?.join(', ') ?? '';
                     }
                     if (state.errors!.containsKey('description')) {
                       // Description error will be shown via form validation
                     }
                   }
                 });
-                
+
                 // Show error message
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(state.message ?? 'Please fix the errors and try again'),
+                    content: Text(
+                      state.message ?? 'Please fix the errors and try again',
+                    ),
                     backgroundColor: Colors.red,
                     duration: const Duration(seconds: 4),
                   ),
@@ -822,7 +819,8 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                       const SizedBox(height: 24),
 
                       // Upload Progress Indicator
-                      if (state.isUploading && state.uploadProgress != null) ...[
+                      if (state.isUploading &&
+                          state.uploadProgress != null) ...[
                         const SizedBox(height: 16),
                         Container(
                           padding: const EdgeInsets.all(16),
@@ -841,7 +839,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                                     height: 20,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.blue,
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: 12),
@@ -867,7 +867,8 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                               ),
                               const SizedBox(height: 8),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   if (state.currentFileName != null)
                                     Expanded(
@@ -882,7 +883,8 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                                       ),
                                     ),
                                   if (state.elapsedSeconds != null) ...[
-                                    if (state.currentFileName != null) const SizedBox(width: 8),
+                                    if (state.currentFileName != null)
+                                      const SizedBox(width: 8),
                                     Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
@@ -893,7 +895,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                                         ),
                                         const SizedBox(width: 4),
                                         Text(
-                                          _formatDuration(state.elapsedSeconds!),
+                                          _formatDuration(
+                                            state.elapsedSeconds!,
+                                          ),
                                           style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w600,
@@ -911,7 +915,8 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text(
                                         'Overall Progress',
@@ -943,13 +948,16 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                                 ],
                               ),
                               // Current file progress (if available)
-                              if (state.currentFileProgress != null && state.currentFileProgress! > 0 && state.currentFileProgress! < 1) ...[
+                              if (state.currentFileProgress != null &&
+                                  state.currentFileProgress! > 0 &&
+                                  state.currentFileProgress! < 1) ...[
                                 const SizedBox(height: 12),
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
                                       children: [
                                         Text(
                                           'Current File',
@@ -990,7 +998,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                       // Submit Button
                       OneBtn(
                         text: state.isLoading
-                            ? (state.isUploading ? 'Uploading...' : 'Creating...')
+                            ? (state.isUploading
+                                  ? 'Uploading...'
+                                  : 'Creating...')
                             : 'Create Ticket',
                         onPressed: state.isLoading ? null : _handleSubmit,
                       ),
@@ -1050,16 +1060,10 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Error: $error',
-              style: const TextStyle(color: Colors.red),
-            ),
+            Text('Error: $error', style: const TextStyle(color: Colors.red)),
             if (onRetry != null) ...[
               const SizedBox(height: 8),
-              ElevatedButton(
-                onPressed: onRetry,
-                child: const Text('Retry'),
-              ),
+              ElevatedButton(onPressed: onRetry, child: const Text('Retry')),
             ],
           ],
         ),
@@ -1069,17 +1073,12 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     return DropdownButtonFormField<T>(
       value: value,
       items: items.map((item) {
-        return DropdownMenuItem<T>(
-          value: item,
-          child: Text(getLabel(item)),
-        );
+        return DropdownMenuItem<T>(value: item, child: Text(getLabel(item)));
       }).toList(),
       onChanged: enabled ? onChanged : null,
       decoration: InputDecoration(
         hintText: hint,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         filled: true,
         fillColor: enabled ? Colors.grey.shade50 : Colors.grey.shade200,
       ),
@@ -1177,8 +1176,11 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
               ? Container(
                   color: Colors.black,
                   child: const Center(
-                    child: Icon(Icons.play_circle_filled,
-                        color: Colors.white, size: 32),
+                    child: Icon(
+                      Icons.play_circle_filled,
+                      color: Colors.white,
+                      size: 32,
+                    ),
                   ),
                 )
               : Image.file(
@@ -1204,11 +1206,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                 color: Colors.red,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.close,
-                color: Colors.white,
-                size: 16,
-              ),
+              child: const Icon(Icons.close, color: Colors.white, size: 16),
             ),
           ),
         ),
@@ -1216,14 +1214,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
           const Positioned(
             bottom: 4,
             left: 4,
-            child: Icon(
-              Icons.videocam,
-              color: Colors.white,
-              size: 16,
-            ),
+            child: Icon(Icons.videocam, color: Colors.white, size: 16),
           ),
       ],
     );
   }
 }
-

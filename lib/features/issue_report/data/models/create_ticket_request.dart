@@ -10,6 +10,7 @@ class CreateTicketRequest {
     this.longitude,
     this.description,
     this.attachments,
+    this.redeemCode,
   });
 
   final int issueCategoryId;
@@ -22,6 +23,7 @@ class CreateTicketRequest {
   final double? longitude;
   final String? description;
   final List<String>? attachments;
+  final String? redeemCode;
 
   Map<String, dynamic> toJson() {
     return {
@@ -35,6 +37,7 @@ class CreateTicketRequest {
       if (longitude != null) 'longitude': longitude,
       if (description != null && description!.isNotEmpty) 'description': description,
       if (attachments != null && attachments!.isNotEmpty) 'attachments': attachments,
+      if (redeemCode != null && redeemCode!.isNotEmpty) 'redeem_code': redeemCode,
     };
   }
 }
