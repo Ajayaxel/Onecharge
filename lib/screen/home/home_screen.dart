@@ -8,6 +8,7 @@ import 'package:onecharge/features/location/presentation/cubit/location_cubit.da
 import 'package:onecharge/features/location/presentation/cubit/location_state.dart';
 import 'package:onecharge/resources/app_resources.dart';
 import 'package:onecharge/screen/home/widgets/home_google_map.dart';
+import 'package:onecharge/screen/home/widgets/vehicle_management_dialog.dart';
 import 'package:onecharge/screen/issue_report/issue_report_screen.dart';
 import 'package:onecharge/screen/profile/profile_screen.dart';
 
@@ -33,7 +34,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _searchFocusNode.addListener(() {
       if (!_searchFocusNode.hasFocus) {
         _locationCubit.clearSuggestions();
-        
       }
     });
     _loadVehicleInfo();
@@ -84,76 +84,76 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Scaffold(
             body: Stack(
               children: [
-              // Map Background
-              const Positioned.fill(child: HomeGoogleMap()),
+                // Map Background
+                const Positioned.fill(child: HomeGoogleMap()),
 
-              // Top Section
-              SafeArea(
-                child: Column(
-                  children: [
-                    _buildTopBar(vehicleName, vehicleNumber),
-                    const SizedBox(height: 8),
-                    _buildSearchSection(),
-                    const SizedBox(height: 12),
-                  ],
+                // Top Section
+                SafeArea(
+                  child: Column(
+                    children: [
+                      _buildTopBar(vehicleName, vehicleNumber),
+                      const SizedBox(height: 8),
+                      _buildSearchSection(),
+                      const SizedBox(height: 12),
+                    ],
+                  ),
                 ),
-              ),
 
-              // Floating Buttons
-              Positioned(
-                right: 16,
-                bottom: 180,
-                child: SafeArea(
-                  child: Builder(
-                    builder: (context) => FloatingActionButton(
-                      heroTag: 'my_location_fab',
-                      backgroundColor: Colors.white,
-                      onPressed: () => context
-                          .read<LocationCubit>()
-                          .refreshCurrentLocation(),
-                      child: const Icon(
-                        Icons.my_location,
-                        color: Colors.black87,
+                // Floating Buttons
+                Positioned(
+                  right: 16,
+                  bottom: 180,
+                  child: SafeArea(
+                    child: Builder(
+                      builder: (context) => FloatingActionButton(
+                        heroTag: 'my_location_fab',
+                        backgroundColor: Colors.white,
+                        onPressed: () => context
+                            .read<LocationCubit>()
+                            .refreshCurrentLocation(),
+                        child: const Icon(
+                          Icons.my_location,
+                          color: Colors.black87,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
 
-              // Bottom Section
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: BlocBuilder<LocationCubit, LocationState>(
-                      builder: (context, state) {
-                        return Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _buildLocationSummary(context, state),
-                            const SizedBox(height: 12),
-                            // OneBtn(
-                            //   text: 'Send location to dispatch',
-                            //   isLoading: state.isSaving,
-                            //   onPressed: () => context
-                            //       .read<LocationCubit>()
-                            //       .saveSelectedLocation(),
-                            // ),
-                            const SizedBox(height: 12),
-                            _buildIssueReportButton(),
-                          ],
-                        );
-                      },
+                // Bottom Section
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: BlocBuilder<LocationCubit, LocationState>(
+                        builder: (context, state) {
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildLocationSummary(context, state),
+                              const SizedBox(height: 12),
+                              // OneBtn(
+                              //   text: 'Send location to dispatch',
+                              //   isLoading: state.isSaving,
+                              //   onPressed: () => context
+                              //       .read<LocationCubit>()
+                              //       .saveSelectedLocation(),
+                              // ),
+                              const SizedBox(height: 12),
+                              _buildIssueReportButton(),
+                            ],
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
         ),
       ),
     );
@@ -165,45 +165,62 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color.fromRGBO(255, 255, 255, 0.9),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: const Color.fromRGBO(255, 255, 255, 0.5),
-                width: 1,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildVehicleLogo(),
-                const SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      vehicleName,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textColor,
-                      ),
-                    ),
-                    Text(
-                      vehicleNumber,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
+          GestureDetector(
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (context) => VehicleManagementDialog(
+                  vehicleName: vehicleName,
+                  vehicleNumber: vehicleNumber,
+                  vehicleImage: _vehicleImage,
+                  onUpdate: _loadVehicleInfo,
                 ),
-                SizedBox(width: 10,)
-               
-              ],
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color.fromRGBO(255, 255, 255, 0.9),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: const Color.fromRGBO(255, 255, 255, 0.5),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildVehicleLogo(),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        vehicleName,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textColor,
+                        ),
+                      ),
+                      Text(
+                        vehicleNumber,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 10),
+                  const Icon(
+                    Icons.keyboard_arrow_down,
+                    size: 16,
+                    color: Colors.grey,
+                  ),
+                ],
+              ),
             ),
           ),
           GestureDetector(
