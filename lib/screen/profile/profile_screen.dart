@@ -320,7 +320,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   gradient: LinearGradient(
                                     colors: [
                                       AppColors.primaryColor,
-                                      // ignore: deprecated_member_use
+
                                       AppColors.primaryColor.withOpacity(0.7),
                                     ],
                                     begin: Alignment.topLeft,
@@ -328,7 +328,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      // ignore: deprecated_member_use
                                       color: AppColors.primaryColor.withOpacity(
                                         0.3,
                                       ),
