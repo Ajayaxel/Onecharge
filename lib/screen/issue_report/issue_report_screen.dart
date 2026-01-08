@@ -174,6 +174,7 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
             ),
           ),
           centerTitle: true,
+          
         ),
         body: BlocListener<IssueReportBloc, IssueReportState>(
           listener: (context, state) {

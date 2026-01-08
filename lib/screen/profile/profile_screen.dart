@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:onecharge/const/onebtn.dart';
@@ -9,6 +11,7 @@ import 'package:onecharge/screen/login/phone_login.dart';
 import 'package:onecharge/screen/profile/edit_profile_screen.dart';
 import 'package:onecharge/screen/profile/change_password_screen.dart';
 import 'package:onecharge/screen/issue_report/my_tickets_screen.dart';
+import 'package:onecharge/screen/profile/help_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -104,18 +107,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _handleChangePassword() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => const ChangePasswordScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const ChangePasswordScreen()),
     );
   }
 
   Future<void> _handleMyTickets() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => const MyTicketsScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const MyTicketsScreen()),
+    );
+  }
+
+  Future<void> _handleHelp() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const HelpScreen()),
     );
   }
 
@@ -124,9 +130,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final shouldLogout = await showDialog<bool>(
       context: context,
       builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -161,11 +165,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const Text(
                 'Are you sure you want to sign out? You\'ll need to log in again to access your account.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: Colors.grey,
-                  height: 1.4,
-                ),
+                style: TextStyle(fontSize: 15, color: Colors.grey, height: 1.4),
               ),
               const SizedBox(height: 24),
               // Buttons
@@ -286,177 +286,195 @@ class _SettingsScreenState extends State<SettingsScreen> {
           : RefreshIndicator(
               onRefresh: _handleRefresh,
               color: AppColors.primaryColor,
-              child: Column(
-                children: [
-                  const SizedBox(height: 20),
-              
-                  // Profile Header Card
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 20),
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
+              child: CustomScrollView(
+                slivers: [
+                  SliverFillRemaining(
+                    hasScrollBody: false,
                     child: Column(
                       children: [
-                        // Profile Avatar
+                        const SizedBox(height: 20),
+
+                        // Profile Header Card
                         Container(
-                          width: 100,
-                          height: 100,
+                          margin: const EdgeInsets.symmetric(horizontal: 20),
+                          padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: [
-                                AppColors.primaryColor,
-                                AppColors.primaryColor.withOpacity(0.7),
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.primaryColor.withOpacity(0.3),
-                                blurRadius: 15,
-                                offset: const Offset(0, 5),
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
                               ),
                             ],
                           ),
-                          child: _user?.profileImage != null &&
-                                  _user!.profileImage!.isNotEmpty
-                              ? ClipOval(
-                                  child: Image.network(
-                                    _user!.profileImage!,
-                                    fit: BoxFit.cover,
-                                    errorBuilder:
-                                        (context, error, stackTrace) =>
-                                            _buildInitialsAvatar(),
+                          child: Column(
+                            children: [
+                              // Profile Avatar
+                              Container(
+                                width: 100,
+                                height: 100,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      AppColors.primaryColor,
+                                      // ignore: deprecated_member_use
+                                      AppColors.primaryColor.withOpacity(0.7),
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
                                   ),
-                                )
-                              : _buildInitialsAvatar(),
-                        ),
-              
-                        const SizedBox(height: 20),
-              
-                        // User Name
-                        Text(
-                          _user?.name ?? 'User',
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textColor,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-              
-                        const SizedBox(height: 8),
-              
-                        // User Email
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.email_outlined,
-                              size: 18,
-                              color: Colors.grey[600],
-                            ),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                _user?.email ?? 'No email',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.grey[700],
-                                  fontWeight: FontWeight.w400,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      // ignore: deprecated_member_use
+                                      color: AppColors.primaryColor.withOpacity(
+                                        0.3,
+                                      ),
+                                      blurRadius: 15,
+                                      offset: const Offset(0, 5),
+                                    ),
+                                  ],
+                                ),
+                                child:
+                                    _user?.profileImage != null &&
+                                        _user!.profileImage!.isNotEmpty
+                                    ? ClipOval(
+                                        child: Image.network(
+                                          _user!.profileImage!,
+                                          fit: BoxFit.cover,
+                                          errorBuilder:
+                                              (context, error, stackTrace) =>
+                                                  _buildInitialsAvatar(),
+                                        ),
+                                      )
+                                    : _buildInitialsAvatar(),
+                              ),
+
+                              const SizedBox(height: 20),
+
+                              // User Name
+                              Text(
+                                _user?.name ?? 'User',
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textColor,
                                 ),
                                 textAlign: TextAlign.center,
-                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                          ],
-                        ),
-              
-                        if (_user?.phone != null &&
-                            _user!.phone!.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.phone_outlined,
-                                size: 18,
-                                color: Colors.grey[600],
+
+                              const SizedBox(height: 8),
+
+                              // User Email
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.email_outlined,
+                                    size: 18,
+                                    color: Colors.grey[600],
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: Text(
+                                      _user?.email ?? 'No email',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.grey[700],
+                                        fontWeight: FontWeight.w400,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                _user!.phone!,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.grey[700],
-                                  fontWeight: FontWeight.w400,
+
+                              if (_user?.phone != null &&
+                                  _user!.phone!.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.phone_outlined,
+                                      size: 18,
+                                      color: Colors.grey[600],
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _user!.phone!,
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.grey[700],
+                                        fontWeight: FontWeight.w400,
+                                      ),
+                                    ),
+                                  ],
                                 ),
+                              ],
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // Action Buttons
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Column(
+                            children: [
+                              // Edit Profile Button
+                              _buildActionButton(
+                                icon: Icons.edit_outlined,
+                                title: 'Edit Profile',
+                                onTap: _handleEditProfile,
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              // Change Password Button
+                              _buildActionButton(
+                                icon: Icons.lock_outline,
+                                title: 'Change Password',
+                                onTap: _handleChangePassword,
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              // My Tickets / Issue Status Button
+                              _buildActionButton(
+                                icon: Icons.receipt_long_outlined,
+                                title: 'My Tickets',
+                                onTap: _handleMyTickets,
+                              ),
+                              const SizedBox(height: 12),
+                              _buildActionButton(
+                                icon: Icons.help_outline,
+                                title: 'Help',
+                                onTap: _handleHelp,
                               ),
                             ],
                           ),
-                        ],
+                        ),
+
+                        Spacer(),
+
+                        // Logout Button
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: OneBtn(
+                            text: 'Logout',
+                            onPressed: () => _handleLogout(context),
+                          ),
+                        ),
+
+                        const SizedBox(height: 40),
                       ],
                     ),
                   ),
-              
-                  const SizedBox(height: 24),
-              
-                  // Action Buttons
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Column(
-                      children: [
-                        // Edit Profile Button
-                        _buildActionButton(
-                          icon: Icons.edit_outlined,
-                          title: 'Edit Profile',
-                          onTap: _handleEditProfile,
-                        ),
-              
-                        const SizedBox(height: 12),
-              
-                        // Change Password Button
-                        _buildActionButton(
-                          icon: Icons.lock_outline,
-                          title: 'Change Password',
-                          onTap: _handleChangePassword,
-                        ),
-              
-                        const SizedBox(height: 12),
-              
-                        // My Tickets / Issue Status Button
-                        _buildActionButton(
-                          icon: Icons.receipt_long_outlined,
-                          title: 'My Tickets',
-                          onTap: _handleMyTickets,
-                        ),
-                      ],
-                    ),
-                  ),
-              
-                  Spacer(),
-              
-                  // Logout Button
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: OneBtn(
-                      text: 'Logout',
-                      onPressed: () => _handleLogout(context),
-                    ),
-                  ),
-              
-                  const SizedBox(height: 40),
                 ],
               ),
             ),
@@ -476,10 +494,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Colors.grey[300]!,
-            width: 1,
-          ),
+          border: Border.all(color: Colors.grey[300]!, width: 1),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.03),
@@ -490,11 +505,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         child: Row(
           children: [
-            Icon(
-              icon,
-              color: AppColors.primaryColor,
-              size: 24,
-            ),
+            Icon(icon, color: AppColors.primaryColor, size: 24),
             const SizedBox(width: 16),
             Expanded(
               child: Text(
@@ -506,11 +517,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
-            Icon(
-              Icons.chevron_right,
-              color: Colors.grey[400],
-              size: 24,
-            ),
+            Icon(Icons.chevron_right, color: Colors.grey[400], size: 24),
           ],
         ),
       ),
