@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:onecharge/core/storage/token_storage.dart';
 import 'package:onecharge/core/storage/user_progress_storage.dart';
+import 'package:onecharge/core/storage/vehicle_storage.dart';
 import 'package:onecharge/screen/home/home_screen.dart';
 import 'package:onecharge/screen/login/phone_login.dart';
 import 'package:onecharge/screen/onbording/onbording_screen.dart';
@@ -48,24 +49,32 @@ class _SplashScreenState extends State<SplashScreen> {
 
     if (!mounted) return;
 
-    // If token exists, user is logged in - navigate to home screen
+    // If token exists, user is logged in - check vehicle setup
     if (token != null && token.isNotEmpty) {
       print('✅ [SplashScreen] Token exists, user is authenticated');
 
+      // Check both the flag and actual vehicle data
       final hasCompletedVehicleSetup =
           await UserProgressStorage.isVehicleSetupCompleted();
+      final vehicleName = await VehicleStorage.getVehicleName();
+      final hasVehicleData = vehicleName != null && vehicleName.isNotEmpty;
+
       print(
-        '🔍 [SplashScreen] Vehicle setup completed: $hasCompletedVehicleSetup',
+        '🔍 [SplashScreen] Vehicle setup completed flag: $hasCompletedVehicleSetup',
+      );
+      print(
+        '🔍 [SplashScreen] Vehicle data exists: $hasVehicleData (name: $vehicleName)',
       );
 
       if (!mounted) return;
 
-      final destination = hasCompletedVehicleSetup
-          ? HomeScreen()
+      // Navigate to HomeScreen only if vehicle is actually saved
+      final destination = hasVehicleData
+          ? const HomeScreen()
           : const VehicleSelection();
 
       print(
-        '🚀 [SplashScreen] Navigating to: ${hasCompletedVehicleSetup ? "HomeScreen" : "VehicleSelection"}',
+        '🚀 [SplashScreen] Navigating to: ${hasVehicleData ? "HomeScreen" : "VehicleSelection"}',
       );
 
       Navigator.pushReplacement(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:onecharge/features/auth/data/repositories/auth_repository.dart';
 import 'package:onecharge/features/auth/presentation/bloc/login_bloc.dart';
+import 'package:onecharge/screen/login/phone_login.dart';
 import 'package:onecharge/screen/onbording/splash.dart';
 
 void main() {
